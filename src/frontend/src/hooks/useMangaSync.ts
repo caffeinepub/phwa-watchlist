@@ -450,8 +450,13 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.genres,
           data.isFavourite ?? false,
         );
+        // Preserve local data URL cover since backend never stores base64
+        const finalEntry = {
+          ...created,
+          coverImageUrl: created.coverImageUrl ?? data.coverImageUrl,
+        };
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === tempId ? created : e));
+          const next = prev.map((e) => (e.id === tempId ? finalEntry : e));
           saveCache(next);
           return next;
         });
@@ -531,8 +536,13 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.genres,
           data.isFavourite ?? false,
         );
+        // Preserve local data URL cover since backend never stores base64
+        const finalEntry = {
+          ...updated,
+          coverImageUrl: updated.coverImageUrl ?? data.coverImageUrl,
+        };
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === id ? updated : e));
+          const next = prev.map((e) => (e.id === id ? finalEntry : e));
           saveCache(next);
           return next;
         });

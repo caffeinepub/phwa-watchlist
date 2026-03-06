@@ -1,4 +1,11 @@
-import { BookOpen, Edit2, Heart, Star, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  ChevronRight,
+  Edit2,
+  Heart,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   type RefObject,
@@ -9,15 +16,15 @@ import {
 } from "react";
 import ReactDOM from "react-dom";
 import type { MangaEntry } from "../hooks/useMangaSync";
-import { type MangaStatus, STATUS_CLASS, STATUS_LABELS } from "../types/manga";
+import { MangaStatus, STATUS_CLASS, STATUS_LABELS } from "../types/manga";
 
 const GOLD = "oklch(0.82 0.17 85)";
 const GOLD_DIM = "oklch(0.62 0.12 85)";
 const GOLD_FAINT = "oklch(0.40 0.08 85)";
 const PINK = "oklch(0.75 0.22 0)";
 
-const CARD_HEIGHT = 150;
-const COVER_WIDTH_MAX = 150; // max cover width (auto based on aspect ratio, capped)
+const CARD_HEIGHT = 140;
+const COVER_WIDTH_MAX = 170; // max cover width (auto based on aspect ratio, capped)
 const TITLE_WIDTH = 240;
 const SCROLL_SPEED = 30; // px/second
 const SCROLL_GAP = 24; // gap between two text copies
@@ -56,7 +63,22 @@ function StarRating({ rating }: { rating: number }) {
           strokeWidth={1.5}
         />
       ))}
-      <span className="ml-1 text-xs" style={{ color: GOLD_DIM }}>
+      <span
+        className="ml-1 text-xs"
+        style={
+          rating >= 8
+            ? {
+                background:
+                  "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
+                backgroundSize: "200% auto",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                animation: "rainbow-shift 3s linear infinite",
+              }
+            : { color: GOLD_DIM }
+        }
+      >
         {rating}/10
       </span>
     </div>
@@ -680,6 +702,12 @@ export function MangaCard({
   const statusClass = STATUS_CLASS[entry.status as unknown as MangaStatus];
   const displayIndex = index + 1;
 
+  // Alternate title cycling
+  const [displayTitleIndex, setDisplayTitleIndex] = useState(0);
+  const altTitles = [entry.altTitle1, entry.altTitle2].filter(Boolean);
+  const titleOptions = [entry.title, ...altTitles];
+  const displayTitle = titleOptions[displayTitleIndex % titleOptions.length];
+
   // Cover popup
   const [popupVisible, setPopupVisible] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -821,9 +849,8 @@ export function MangaCard({
       transition={{ duration: 0.3, delay: index * 0.04, ease: "easeOut" }}
       className="relative group flex flex-row overflow-hidden"
       style={{
-        width: 1300,
+        width: 1100,
         height: CARD_HEIGHT,
-        maxWidth: "100%",
         background: "#000",
         border: "1px solid oklch(0.82 0.17 85 / 0.6)",
         borderRadius: "0.5rem",
@@ -910,7 +937,39 @@ export function MangaCard({
       </div>
 
       {/* ── Scrolling title area ─────────────────────────────────────────── */}
-      <ScrollingTitle title={entry.title} />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "flex-start",
+          flexShrink: 0,
+        }}
+      >
+        <ScrollingTitle title={displayTitle} />
+        {altTitles.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setDisplayTitleIndex((i) => (i + 1) % titleOptions.length)
+            }
+            data-ocid={`manga.alt_title_cycle.${displayIndex}`}
+            title="Cycle alternate titles"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: "2px 4px",
+              display: "flex",
+              alignItems: "flex-start",
+              paddingTop: "14px",
+              color: "oklch(0.55 0.12 60)",
+              flexShrink: 0,
+            }}
+          >
+            <ChevronRight size={14} strokeWidth={2} />
+          </button>
+        )}
+      </div>
 
       {/* ── Info area ────────────────────────────────────────────────────── */}
       <div
@@ -952,7 +1011,24 @@ export function MangaCard({
               aria-label={`Status: ${STATUS_LABELS[entry.status as unknown as MangaStatus]}. Click to change.`}
               title="Click to change status"
             >
-              {STATUS_LABELS[entry.status as unknown as MangaStatus]}
+              {(entry.status as unknown as MangaStatus) ===
+              MangaStatus.Completed ? (
+                <span
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
+                    backgroundSize: "200% auto",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    animation: "rainbow-shift 3s linear infinite",
+                  }}
+                >
+                  {STATUS_LABELS[entry.status as unknown as MangaStatus]}
+                </span>
+              ) : (
+                STATUS_LABELS[entry.status as unknown as MangaStatus]
+              )}
             </button>
 
             {/* Heart / Favourite toggle — always visible */}
@@ -1102,7 +1178,9 @@ export function MangaCard({
               padding: "2px 4px",
               borderRadius: "0.25rem",
               cursor: "pointer",
-              textAlign: "left",
+              display: "inline-flex",
+              alignItems: "center",
+              width: "fit-content",
               transition: "background 0.15s",
             }}
             onMouseEnter={(e) => {
@@ -1129,10 +1207,12 @@ export function MangaCard({
               padding: "2px 4px",
               borderRadius: "0.25rem",
               cursor: "pointer",
-              textAlign: "left",
-              transition: "background 0.15s",
+              display: "inline-flex",
+              alignItems: "center",
+              width: "fit-content",
               fontSize: "0.75rem",
               color: GOLD_FAINT,
+              transition: "background 0.15s, color 0.15s",
             }}
             onMouseEnter={(e) => {
               const el = e.currentTarget as HTMLElement;

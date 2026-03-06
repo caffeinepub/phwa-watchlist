@@ -180,4 +180,10 @@
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
+
+  /* Rainbow shift animation for completed status / high ratings */
+  @keyframes rainbow-shift {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
 }
