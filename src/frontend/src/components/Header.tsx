@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, LogOut, RefreshCw, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
 const GOLD = "oklch(0.82 0.17 85)";
@@ -14,6 +14,76 @@ interface HeaderProps {
   currentPage: number;
   totalPages: number;
   onGoToPage: (page: number) => void;
+  lastSynced?: number | null;
+  cycleBalance?: number | null;
+}
+
+function CycleBadge({ tc }: { tc: number }) {
+  // Color tiers: green-ish gold when healthy, amber when low, red when critical
+  let color: string;
+  let borderColor: string;
+  let bgColor: string;
+
+  if (tc > 1) {
+    // Healthy — gold-green
+    color = "oklch(0.78 0.15 130)";
+    borderColor = "oklch(0.78 0.15 130 / 0.5)";
+    bgColor = "oklch(0.78 0.15 130 / 0.08)";
+  } else if (tc >= 0.5) {
+    // Low — amber
+    color = "oklch(0.78 0.18 65)";
+    borderColor = "oklch(0.78 0.18 65 / 0.5)";
+    bgColor = "oklch(0.78 0.18 65 / 0.08)";
+  } else {
+    // Critical — red
+    color = "oklch(0.65 0.22 25)";
+    borderColor = "oklch(0.65 0.22 25 / 0.5)";
+    bgColor = "oklch(0.65 0.22 25 / 0.08)";
+  }
+
+  return (
+    <div
+      data-ocid="header.cycle_balance"
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hidden sm:flex"
+      style={{
+        border: `1px solid ${borderColor}`,
+        color,
+        background: bgColor,
+        cursor: "default",
+      }}
+      title="Canister cycles remaining (may be slightly out of date)"
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        aria-hidden="true"
+        style={{ flexShrink: 0 }}
+      >
+        <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2" />
+        <path
+          d="M3 5.5 L4.5 7 L7 3.5"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {tc.toFixed(2)} TC
+    </div>
+  );
+}
+
+function formatSynced(ts: number | null | undefined): string {
+  if (!ts) return "";
+  const diffMs = Date.now() - ts;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "Synced just now";
+  if (mins < 60) return `Synced ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Synced ${hrs}h ago`;
+  return `Synced ${Math.floor(hrs / 24)}d ago`;
 }
 
 function OnlineBadge({ isOnline }: { isOnline: boolean }) {
@@ -75,9 +145,17 @@ export function Header({
   currentPage,
   totalPages,
   onGoToPage,
+  lastSynced,
+  cycleBalance,
 }: HeaderProps) {
   const isOnline = useOnlineStatus();
   const [pageInputValue, setPageInputValue] = useState(String(currentPage));
+  // Force re-render every minute so the "Synced Xm ago" label stays current
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forceUpdate((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Sync input when currentPage prop changes (e.g. from bottom pagination)
   const syncedPage = String(currentPage);
@@ -204,6 +282,21 @@ export function Header({
             >
               <span>{pendingCount} pending</span>
             </div>
+          )}
+          {/* Last synced timestamp */}
+          {!isSyncing && pendingCount === 0 && formatSynced(lastSynced) && (
+            <span
+              className="text-xs hidden sm:inline"
+              style={{ color: "oklch(0.50 0.08 85)" }}
+              title="Last confirmed sync with backend"
+            >
+              {formatSynced(lastSynced)}
+            </span>
+          )}
+
+          {/* Cycle balance badge — only shown when a value is available */}
+          {cycleBalance !== null && cycleBalance !== undefined && (
+            <CycleBadge tc={cycleBalance} />
           )}
         </div>
 

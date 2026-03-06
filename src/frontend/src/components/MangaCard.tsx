@@ -1129,6 +1129,33 @@ export function MangaCard({
   const [cenLvlInput, setCenLvlInput] = useState("");
   const cenLvlTriggerRef = useRef<HTMLButtonElement>(null);
 
+  // Lazy-load cover image via IntersectionObserver
+  const [coverVisible, setCoverVisible] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    // If no cover image, no need to observe
+    if (!entry.coverImageUrl) {
+      setCoverVisible(false);
+      return;
+    }
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const obs of entries) {
+          if (obs.isIntersecting) {
+            setCoverVisible(true);
+            observer.disconnect();
+          }
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [entry.coverImageUrl]);
+
   // Notes state
   const [notesHoverVisible, setNotesHoverVisible] = useState(false);
   const [notesEditOpen, setNotesEditOpen] = useState(false);
@@ -1313,6 +1340,7 @@ export function MangaCard({
 
   return (
     <motion.article
+      ref={cardRef}
       data-ocid={`manga.item.${displayIndex}`}
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
@@ -1359,7 +1387,7 @@ export function MangaCard({
         onMouseEnter={showPopup}
         onMouseLeave={scheduleHide}
       >
-        {entry.coverImageUrl ? (
+        {entry.coverImageUrl && coverVisible ? (
           <img
             src={entry.coverImageUrl}
             alt={`${entry.title} cover`}
@@ -1381,6 +1409,18 @@ export function MangaCard({
                 ) as HTMLElement;
                 if (fallback) fallback.style.display = "flex";
               }
+            }}
+          />
+        ) : null}
+        {/* Gold-tinted placeholder while cover is not yet visible */}
+        {entry.coverImageUrl && !coverVisible ? (
+          <div
+            style={{
+              height: "100%",
+              width: 90,
+              background:
+                "linear-gradient(135deg, oklch(0.08 0.03 85) 0%, oklch(0.12 0.05 85) 50%, oklch(0.08 0.03 85) 100%)",
+              flexShrink: 0,
             }}
           />
         ) : null}

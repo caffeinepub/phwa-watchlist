@@ -5,11 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useActor } from "./hooks/useActorFixed";
+import { useCycleBalance } from "./hooks/useCycleBalance";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useMangaSync } from "./hooks/useMangaSync";
 
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { Header } from "./components/Header";
+import { ImportModal } from "./components/ImportModal";
 import { LoginPage } from "./components/LoginPage";
 import { MangaCard } from "./components/MangaCard";
 import { MangaFormModal } from "./components/MangaFormModal";
@@ -54,7 +56,11 @@ export default function App() {
     updateArtRating,
     updateCenLvl,
     pendingCount,
+    lastSynced,
   } = useMangaSync();
+
+  // ── Cycle balance monitor ───────────────────────────────────────────────────
+  const { cycleBalance } = useCycleBalance(isAuthenticated);
 
   // ── Password gate state ─────────────────────────────────────────────────────
   const [passwordCleared, setPasswordCleared] = useState(false);
@@ -81,6 +87,15 @@ export default function App() {
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<MangaEntry | null>(null);
+
+  // Soft-delete / undo state
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  // Import/Export state
+  const [importOpen, setImportOpen] = useState(false);
 
   // ── Fetch entries when actor is ready ──────────────────────────────────────
   useEffect(() => {
@@ -317,11 +332,16 @@ export default function App() {
   }, [sortKey]);
 
   // ── Pagination computed values ──────────────────────────────────────────────
+  // Filter out any entry that is pending deletion (soft-delete / undo window)
+  const visibleEntries = pendingDeleteId
+    ? filteredEntries.filter((e) => e.id !== pendingDeleteId)
+    : filteredEntries;
+
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredEntries.length / ITEMS_PER_PAGE),
+    Math.ceil(visibleEntries.length / ITEMS_PER_PAGE),
   );
-  const pagedEntries = filteredEntries.slice(
+  const pagedEntries = visibleEntries.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE,
   );
@@ -394,20 +414,48 @@ export default function App() {
     [editingEntry, actor, updateEntry, addEntry, deleteEntry],
   );
 
-  const handleDeleteConfirm = useCallback(async () => {
+  const handleDeleteConfirm = useCallback(() => {
     if (!deleteTarget) return;
     const title = deleteTarget.title;
-    const id = deleteTarget.id;
+    const entryToDelete = deleteTarget;
     setDeleteTarget(null);
-    try {
-      await deleteEntry(
-        actor as unknown as Parameters<typeof deleteEntry>[0],
-        id,
-      );
-      toast.success(`"${title}" removed`);
-    } catch {
-      toast.error("Failed to delete entry");
+
+    // Cancel any existing pending delete
+    if (pendingDeleteTimerRef.current) {
+      clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = null;
     }
+
+    // Optimistically hide the entry in UI immediately
+    setPendingDeleteId(entryToDelete.id);
+
+    // Show toast with Undo action
+    toast(`"${title}" removed`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          // Cancel the pending delete
+          if (pendingDeleteTimerRef.current) {
+            clearTimeout(pendingDeleteTimerRef.current);
+            pendingDeleteTimerRef.current = null;
+          }
+          setPendingDeleteId(null);
+        },
+      },
+      duration: 5000,
+    });
+
+    // After 5s, commit the delete for real
+    pendingDeleteTimerRef.current = setTimeout(() => {
+      pendingDeleteTimerRef.current = null;
+      setPendingDeleteId(null);
+      void deleteEntry(
+        actor as unknown as Parameters<typeof deleteEntry>[0],
+        entryToDelete.id,
+      ).catch(() => {
+        toast.error(`Failed to delete "${title}"`);
+      });
+    }, 5000);
   }, [deleteTarget, actor, deleteEntry]);
 
   const handleLogout = useCallback(() => {
@@ -516,6 +564,59 @@ export default function App() {
     [updateEntry, actor],
   );
 
+  const handleExport = useCallback(() => {
+    const exportEntries = entries.map((entry) => ({
+      id: entry.id,
+      mainTitle: entry.title,
+      ...(entry.altTitle1 ? { altTitle1: entry.altTitle1 } : {}),
+      ...(entry.altTitle2 ? { altTitle2: entry.altTitle2 } : {}),
+      synopsis: entry.synopsis || "",
+      genres: entry.genres,
+      rating: entry.rating != null ? String(Number(entry.rating)) : "N/A",
+      cenLVL: entry.cenLvl != null ? String(entry.cenLvl) : "0",
+      art: entry.artRating != null ? String(entry.artRating) : "0",
+      chaptersOwned: String(Number(entry.totalChapters ?? 0)),
+      chaptersRead: String(Number(entry.currentChapter)),
+      personalNotes: entry.notes || "",
+      bookmarked: entry.isFavourite,
+      imageFilename: `${entry.id}.jpg`,
+    }));
+
+    const backup = {
+      version: "2.0",
+      timestamp: new Date().toISOString(),
+      chunkIndex: 0,
+      totalChunks: 1,
+      totalEntries: exportEntries.length,
+      chunkEntries: exportEntries.length,
+      entries: exportEntries,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `phwa-watchlist-export-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${exportEntries.length} entries`);
+  }, [entries]);
+
+  const handleImportEntry = useCallback(
+    async (data: MangaFormData) => {
+      await addEntry(actor as unknown as Parameters<typeof addEntry>[0], {
+        ...data,
+        isFavourite: data.isFavourite ?? false,
+      });
+    },
+    [addEntry, actor],
+  );
+
   // ── Loading screen ─────────────────────────────────────────────────────────
   if (isInitializing) {
     return (
@@ -569,6 +670,8 @@ export default function App() {
         currentPage={currentPage}
         totalPages={totalPages}
         onGoToPage={goToPage}
+        lastSynced={lastSynced}
+        cycleBalance={cycleBalance}
       />
 
       <main className="flex-1 flex flex-col gap-4 py-4">
@@ -598,6 +701,8 @@ export default function App() {
           allGenres={allGenres}
           showFavouritesOnly={showFavouritesOnly}
           onToggleFavouritesFilter={() => setShowFavouritesOnly((v) => !v)}
+          onImportClick={() => setImportOpen(true)}
+          onExportClick={handleExport}
         />
 
         {/* List — scroll wrapper handles overflow without dynamic sizing */}
@@ -705,7 +810,7 @@ export default function App() {
             )}
 
             {/* Empty state */}
-            {!isLoading && filteredEntries.length === 0 && (
+            {!isLoading && visibleEntries.length === 0 && (
               <div
                 data-ocid="manga.empty_state"
                 className="flex flex-col items-center justify-center py-20 gap-4"
@@ -774,7 +879,7 @@ export default function App() {
             )}
 
             {/* List */}
-            {filteredEntries.length > 0 && (
+            {visibleEntries.length > 0 && (
               <div
                 data-ocid="manga.list"
                 className="flex flex-col gap-3"
@@ -982,6 +1087,13 @@ export default function App() {
         title={deleteTarget?.title ?? ""}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existingEntries={entries}
+        onImportEntry={handleImportEntry}
       />
     </div>
   );

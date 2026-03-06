@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/select";
 import {
   ChevronDown,
+  Download,
   Heart,
   Plus,
   Search,
   SlidersHorizontal,
+  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -53,6 +55,8 @@ interface ToolbarProps {
   allGenres: string[];
   showFavouritesOnly: boolean;
   onToggleFavouritesFilter: () => void;
+  onImportClick: () => void;
+  onExportClick: () => void;
 }
 
 // ── Genre Multi-Select Dropdown ───────────────────────────────────────────────
@@ -286,6 +290,8 @@ export function Toolbar({
   allGenres,
   showFavouritesOnly,
   onToggleFavouritesFilter,
+  onImportClick,
+  onExportClick,
 }: ToolbarProps) {
   return (
     <div className="flex flex-col gap-2 px-4 md:px-6">
@@ -389,6 +395,64 @@ export function Toolbar({
           <span className="hidden sm:inline">Add Manga</span>
           <span className="sm:hidden">Add</span>
         </Button>
+
+        {/* Import button */}
+        <button
+          type="button"
+          data-ocid="toolbar.import_button"
+          onClick={onImportClick}
+          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+          style={{
+            background: "transparent",
+            border: `1.5px solid ${GOLD}`,
+            color: GOLD,
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.background = GOLD;
+            el.style.color = "#000";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.background = "transparent";
+            el.style.color = GOLD;
+          }}
+          aria-label="Import watchlist"
+          title="Import watchlist"
+        >
+          <Upload size={14} strokeWidth={2} />
+          <span className="hidden sm:inline">Import</span>
+        </button>
+
+        {/* Export button */}
+        <button
+          type="button"
+          data-ocid="toolbar.export_button"
+          onClick={onExportClick}
+          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+          style={{
+            background: "transparent",
+            border: `1.5px solid ${GOLD}`,
+            color: GOLD,
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.background = GOLD;
+            el.style.color = "#000";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.background = "transparent";
+            el.style.color = GOLD;
+          }}
+          aria-label="Export watchlist"
+          title="Export watchlist"
+        >
+          <Download size={14} strokeWidth={2} />
+          <span className="hidden sm:inline">Export</span>
+        </button>
       </div>
 
       {/* Row 2: Filters */}

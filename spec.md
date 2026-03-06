@@ -1,19 +1,25 @@
 # Phwa Watchlist
 
 ## Current State
-Full manga watchlist app with Internet Identity login, password gate, offline sync, and per-user manga entries stored in the backend canister. The backend uses an authorization module (`access-control.mo`) where `getUserRole()` calls `Runtime.trap("User is not registered")` when a principal has no role entry. `registerCaller()` in `main.mo` calls `getUserRole()` first to check the current role -- this causes a hard trap for any brand new principal, making `registerCaller()` always fail and the frontend unable to connect.
+Full-stack manga watchlist app with Motoko backend and React frontend. Backend exposes manga CRUD, authentication via Internet Identity, authorization via role-based access. Frontend has Header, Toolbar, MangaCard, Import/Export, and a last-synced timestamp. There is currently no cycle monitoring.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- `getCycleBalance` query method in the Motoko backend that returns the canister's current cycle balance as a `Nat`
+- `getCycleBalance(): Promise<bigint>` entry in `backend.d.ts`
+- A `CycleMonitor` component (or inline widget) that displays the cycle balance in the Header's left section, alongside the sync indicator. It fetches the balance once on load (when online and authenticated), and shows the value formatted as TC (trillions of cycles) with a warning color when balance is low (< 0.5 TC). Balance is slightly stale by design -- no live polling needed.
 
 ### Modify
-- `access-control.mo`: Change `getUserRole()` so that when a principal is not found in the role map, it returns `#guest` instead of calling `Runtime.trap("User is not registered")`. This makes unregistered principals behave the same as anonymous principals -- as guests -- which is safe and correct since `registerCaller()` in `main.mo` already handles the `#guest` case by assigning `#user`.
+- `Header.tsx` to accept and display an optional `cycleBalance` prop (in TC, as a number)
+- `App.tsx` to call `getCycleBalance` once after authentication and pass the result to Header
 
 ### Remove
 - Nothing
 
 ## Implementation Plan
-1. Regenerate the backend with the single change: in `getUserRole`, replace `Runtime.trap("User is not registered")` with `return #guest` for the `case (null)` branch.
-2. Keep all other backend logic (MangaEntry, all CRUD functions, MixinAuthorization, etc.) exactly as-is.
+1. Add `getCycleBalance` to `main.mo` using `ExperimentalCycles.balance()`
+2. Add `getCycleBalance(): Promise<bigint>` to `backend.d.ts`
+3. In `App.tsx`, call `actor.getCycleBalance()` once after `registerCaller()` and store in state
+4. Pass cycle balance to `Header` as an optional prop
+5. In `Header.tsx`, render a small cycle balance badge next to the sync indicator, formatted as `X.XX TC`, amber/red colored when < 0.5 TC

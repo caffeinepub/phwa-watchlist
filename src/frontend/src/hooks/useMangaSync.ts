@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { MangaEntry } from "../backend.d";
 import { MangaStatus as BackendMangaStatus } from "../backend.d";
 import type { MangaFormData, SyncOperation } from "../types/manga";
@@ -9,6 +10,10 @@ export type { MangaEntry };
 
 const CACHE_KEY = "manga_cache";
 const QUEUE_KEY = "manga_sync_queue";
+const LAST_SYNCED_KEY = "manga_last_synced";
+
+// Module-level flag so the warning is shown at most once per page load
+let _storageWarningShown = false;
 
 // ── Serialization helpers for bigint ──────────────────────────────────────────
 
@@ -96,6 +101,22 @@ function saveCache(entries: MangaEntry[]): void {
       CACHE_KEY,
       JSON.stringify(entries.map(serializeEntry)),
     );
+    // Check storage usage after writing
+    if (!_storageWarningShown) {
+      let totalChars = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          totalChars += localStorage.getItem(key)?.length ?? 0;
+        }
+      }
+      if (totalChars > 4_000_000) {
+        _storageWarningShown = true;
+        toast.warning(
+          "localStorage is nearly full (~4MB of ~5MB used). Consider exporting a backup to avoid data loss.",
+        );
+      }
+    }
   } catch {
     // storage full — silently ignore
   }
@@ -290,6 +311,7 @@ interface UseMangaSyncReturn {
     cenLvl: number | undefined,
   ) => Promise<void>;
   pendingCount: number;
+  lastSynced: number | null;
 }
 
 export function useMangaSync(): UseMangaSyncReturn {
@@ -302,7 +324,18 @@ export function useMangaSync(): UseMangaSyncReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(() => loadQueue().length);
+  const [lastSynced, setLastSynced] = useState<number | null>(() => {
+    const v = localStorage.getItem(LAST_SYNCED_KEY);
+    return v ? Number(v) : null;
+  });
   const actorRef = useRef<ActorLike | null>(null);
+
+  // Helper to record a successful sync timestamp
+  const recordSync = useCallback(() => {
+    const now = Date.now();
+    localStorage.setItem(LAST_SYNCED_KEY, String(now));
+    setLastSynced(now);
+  }, []);
 
   // Flush queue when coming back online
   useEffect(() => {
@@ -420,43 +453,48 @@ export function useMangaSync(): UseMangaSyncReturn {
         );
         setEntries(merged);
         saveCache(merged);
+        recordSync();
       } catch {
         // ignore
       }
       setIsSyncing(false);
       queryClient.invalidateQueries({ queryKey: ["manga"] });
     })();
-  }, [isOnline, queryClient]);
+  }, [isOnline, queryClient, recordSync]);
 
-  const fetchEntries = useCallback(async (actor: ActorLike) => {
-    actorRef.current = actor;
-    setIsLoading(true);
-    try {
-      const fresh = await actor.getEntries();
-      // Merge locally-stored cover images (base64 data URLs) back into backend entries,
-      // because the backend never persists base64 images.
-      const cachedCovers: Record<string, string> = {};
-      const cached = loadCache();
-      for (const c of cached) {
-        if (c.coverImageUrl?.startsWith("data:")) {
-          cachedCovers[c.id] = c.coverImageUrl;
+  const fetchEntries = useCallback(
+    async (actor: ActorLike) => {
+      actorRef.current = actor;
+      setIsLoading(true);
+      try {
+        const fresh = await actor.getEntries();
+        // Merge locally-stored cover images (base64 data URLs) back into backend entries,
+        // because the backend never persists base64 images.
+        const cachedCovers: Record<string, string> = {};
+        const cached = loadCache();
+        for (const c of cached) {
+          if (c.coverImageUrl?.startsWith("data:")) {
+            cachedCovers[c.id] = c.coverImageUrl;
+          }
         }
+        const merged = fresh.map((e) =>
+          cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
+        );
+        // Always use the backend's authoritative list (even if empty).
+        // NEVER fall back to SEED_ENTRIES here — seed IDs don't exist in the backend,
+        // so any subsequent save/edit would fail with "Entry not found".
+        setEntries(merged);
+        saveCache(merged);
+        recordSync();
+      } catch {
+        // Backend call failed (transient error after confirmed registration).
+        // Keep whatever is currently in state — do NOT overwrite with seed data.
+      } finally {
+        setIsLoading(false);
       }
-      const merged = fresh.map((e) =>
-        cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
-      );
-      // Always use the backend's authoritative list (even if empty).
-      // NEVER fall back to SEED_ENTRIES here — seed IDs don't exist in the backend,
-      // so any subsequent save/edit would fail with "Entry not found".
-      setEntries(merged);
-      saveCache(merged);
-    } catch {
-      // Backend call failed (transient error after confirmed registration).
-      // Keep whatever is currently in state — do NOT overwrite with seed data.
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [recordSync],
+  );
 
   const addEntry = useCallback(
     async (actor: ActorLike | null, data: MangaFormData) => {
@@ -534,6 +572,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         setEntries((prev) => {
           const next = prev.filter((e) => e.id !== tempId);
@@ -543,7 +582,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         throw new Error("Failed to add entry");
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateEntry = useCallback(
@@ -629,6 +668,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -641,7 +681,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         throw new Error("Failed to update entry");
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const deleteEntry = useCallback(
@@ -665,6 +705,7 @@ export function useMangaSync(): UseMangaSyncReturn {
 
       try {
         await actor.deleteEntry(id);
+        recordSync();
       } catch {
         if (removed) {
           const removedEntry = removed;
@@ -677,7 +718,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         throw new Error("Failed to delete entry");
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const toggleFavourite = useCallback(
@@ -719,6 +760,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -730,7 +772,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateStatus = useCallback(
@@ -770,6 +812,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -781,7 +824,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateChapters = useCallback(
@@ -839,6 +882,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -850,7 +894,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateRating = useCallback(
@@ -900,6 +944,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -911,7 +956,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateArtRating = useCallback(
@@ -958,6 +1003,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -969,7 +1015,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   const updateCenLvl = useCallback(
@@ -1012,6 +1058,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           saveCache(next);
           return next;
         });
+        recordSync();
       } catch {
         if (previous) {
           const prev_entry = previous;
@@ -1023,7 +1070,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         }
       }
     },
-    [isOnline],
+    [isOnline, recordSync],
   );
 
   return {
@@ -1041,5 +1088,6 @@ export function useMangaSync(): UseMangaSyncReturn {
     updateArtRating,
     updateCenLvl,
     pendingCount,
+    lastSynced,
   };
 }
