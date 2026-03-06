@@ -51,6 +51,8 @@ export function MangaFormModal({
   const [currentChapter, setCurrentChapter] = useState("");
   const [totalChapters, setTotalChapters] = useState("");
   const [rating, setRating] = useState("");
+  const [artRating, setArtRating] = useState("");
+  const [cenLvl, setCenLvl] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [genres, setGenres] = useState<string[]>([]);
@@ -76,6 +78,8 @@ export function MangaFormModal({
           : "",
       );
       setRating(entry.rating != null ? Number(entry.rating).toString() : "");
+      setArtRating(entry.artRating != null ? String(entry.artRating) : "");
+      setCenLvl(entry.cenLvl != null ? String(entry.cenLvl) : "");
       setCoverImageUrl(entry.coverImageUrl ?? "");
       setNotes(entry.notes);
       setGenres(entry.genres);
@@ -84,10 +88,12 @@ export function MangaFormModal({
       setSynopsis("");
       setAltTitle1("");
       setAltTitle2("");
-      setStatus(MangaStatus.PlanToRead);
+      setStatus(MangaStatus.Incomplete);
       setCurrentChapter("0");
       setTotalChapters("");
       setRating("");
+      setArtRating("");
+      setCenLvl("");
       setCoverImageUrl("");
       setNotes("");
       setGenres([]);
@@ -108,6 +114,16 @@ export function MangaFormModal({
       if (Number.isNaN(r) || r < 1 || r > 10)
         errs.rating = "Rating must be 1–10";
     }
+    if (artRating) {
+      const r = Number(artRating);
+      if (Number.isNaN(r) || r < 1 || r > 10)
+        errs.artRating = "Art rating must be 1–10";
+    }
+    if (cenLvl) {
+      const r = Number(cenLvl);
+      if (Number.isNaN(r) || r < 1 || r > 10)
+        errs.cenLvl = "Cen LVL must be 1–10";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -126,6 +142,8 @@ export function MangaFormModal({
         currentChapter: Number(currentChapter) || 0,
         totalChapters: totalChapters ? Number(totalChapters) : undefined,
         rating: rating ? Number(rating) : undefined,
+        artRating: artRating ? Number(artRating) : undefined,
+        cenLvl: cenLvl ? Number(cenLvl) : undefined,
         coverImageUrl: coverImageUrl.trim() || undefined,
         notes: notes.trim(),
         genres,
@@ -159,12 +177,36 @@ export function MangaFormModal({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const result = ev.target?.result;
-      if (typeof result === "string") {
-        setCoverImageUrl(result);
-      }
+      const dataUrl = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const MAX_SIDE = 800;
+        let { width, height } = img;
+        if (width > MAX_SIDE || height > MAX_SIDE) {
+          if (width > height) {
+            height = Math.round((height * MAX_SIDE) / width);
+            width = MAX_SIDE;
+          } else {
+            width = Math.round((width * MAX_SIDE) / height);
+            height = MAX_SIDE;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setCoverImageUrl(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.82);
+        setCoverImageUrl(compressed);
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
     // Reset input so re-selecting same file still triggers onChange
@@ -495,9 +537,10 @@ export function MangaFormModal({
                     type="number"
                     min={1}
                     max={10}
+                    step={0.5}
                     value={rating}
                     onChange={(e) => setRating(e.target.value)}
-                    placeholder="e.g. 9"
+                    placeholder="e.g. 9.5"
                     style={inputStyle}
                   />
                   {errors.rating && (
@@ -508,6 +551,58 @@ export function MangaFormModal({
                       {errors.rating}
                     </p>
                   )}
+                </div>
+
+                {/* Art Rating + Cen LVL */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label style={{ color: GOLD_DIM, fontSize: "0.8125rem" }}>
+                      Art Rating (1–10, optional)
+                    </Label>
+                    <Input
+                      data-ocid="manga.form.art_rating_input"
+                      type="number"
+                      min={1}
+                      max={10}
+                      step={0.5}
+                      value={artRating}
+                      onChange={(e) => setArtRating(e.target.value)}
+                      placeholder="e.g. 7.5"
+                      style={inputStyle}
+                    />
+                    {errors.artRating && (
+                      <p
+                        className="text-xs"
+                        style={{ color: "oklch(0.7 0.22 25)" }}
+                      >
+                        {errors.artRating}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label style={{ color: GOLD_DIM, fontSize: "0.8125rem" }}>
+                      Cen LVL (1–10, optional)
+                    </Label>
+                    <Input
+                      data-ocid="manga.form.cen_lvl_input"
+                      type="number"
+                      min={1}
+                      max={10}
+                      step={0.5}
+                      value={cenLvl}
+                      onChange={(e) => setCenLvl(e.target.value)}
+                      placeholder="e.g. 3.0"
+                      style={inputStyle}
+                    />
+                    {errors.cenLvl && (
+                      <p
+                        className="text-xs"
+                        style={{ color: "oklch(0.7 0.22 25)" }}
+                      >
+                        {errors.cenLvl}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Notes */}

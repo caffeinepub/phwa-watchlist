@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Edit2,
   Heart,
+  NotebookPen,
   Star,
   Trash2,
 } from "lucide-react";
@@ -23,11 +24,24 @@ const GOLD_DIM = "oklch(0.62 0.12 85)";
 const GOLD_FAINT = "oklch(0.40 0.08 85)";
 const PINK = "oklch(0.75 0.22 0)";
 
-const CARD_HEIGHT = 140;
-const COVER_WIDTH_MAX = 170; // max cover width (auto based on aspect ratio, capped)
+const CARD_HEIGHT = 119;
+const COVER_WIDTH_MAX = 145; // max cover width (auto based on aspect ratio, capped)
 const TITLE_WIDTH = 240;
 const SCROLL_SPEED = 30; // px/second
 const SCROLL_GAP = 24; // gap between two text copies
+
+const NOTES_RED = "oklch(0.7 0.22 25)";
+
+const RAINBOW_STYLE: React.CSSProperties = {
+  background:
+    "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
+  backgroundSize: "200% auto",
+  WebkitBackgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  backgroundClip: "text",
+  animation: "rainbow-shift 3s linear infinite",
+  fontSize: "0.75rem",
+};
 
 interface MangaCardProps {
   entry: MangaEntry;
@@ -42,24 +56,73 @@ interface MangaCardProps {
     total: number | undefined,
   ) => void;
   onQuickRatingChange: (entry: MangaEntry, rating: number | undefined) => void;
+  onQuickArtRatingChange: (
+    entry: MangaEntry,
+    artRating: number | undefined,
+  ) => void;
+  onQuickCenLvlChange: (entry: MangaEntry, cenLvl: number | undefined) => void;
+  onQuickNotesChange: (entry: MangaEntry, notes: string) => void;
 }
 
 function StarRating({ rating }: { rating: number }) {
-  const filled = Math.round(rating / 2);
+  const fullStars = Math.floor(rating / 2);
+  const hasHalf = rating % 2 >= 1;
+  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
+
   return (
     <div
       className="flex gap-0.5 items-center"
       aria-label={`Rating: ${rating}/10`}
     >
-      {Array.from({ length: 5 }, (_, i) => i).map((i) => (
+      {Array.from({ length: fullStars }, (_, i) => i).map((i) => (
         <Star
-          key={`star-${i}`}
+          // biome-ignore lint/suspicious/noArrayIndexKey: static display array, never reorders
+          key={`full-${i}`}
           size={11}
-          style={{
-            color: i < filled ? GOLD : GOLD_FAINT,
-            fill: i < filled ? GOLD : "transparent",
-            flexShrink: 0,
-          }}
+          style={{ color: GOLD, fill: GOLD, flexShrink: 0 }}
+          strokeWidth={1.5}
+        />
+      ))}
+      {hasHalf && (
+        <div
+          style={{ position: "relative", width: 11, height: 11, flexShrink: 0 }}
+        >
+          {/* Empty star background */}
+          <Star
+            size={11}
+            style={{
+              color: GOLD_FAINT,
+              fill: "transparent",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+            strokeWidth={1.5}
+          />
+          {/* Half-filled overlay: clip left half */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "50%",
+              overflow: "hidden",
+            }}
+          >
+            <Star
+              size={11}
+              style={{ color: GOLD, fill: GOLD }}
+              strokeWidth={1.5}
+            />
+          </div>
+        </div>
+      )}
+      {Array.from({ length: emptyStars }, (_, i) => i).map((i) => (
+        <Star
+          // biome-ignore lint/suspicious/noArrayIndexKey: static display array, never reorders
+          key={`empty-${i}`}
+          size={11}
+          style={{ color: GOLD_FAINT, fill: "transparent", flexShrink: 0 }}
           strokeWidth={1.5}
         />
       ))}
@@ -148,10 +211,11 @@ function computePosition(anchorRect: DOMRect): PopupPosition {
   const vh = window.innerHeight;
   const margin = 8;
 
-  // Prefer right of the card
-  let left = anchorRect.right + margin;
+  // Position popup 100px to the right of the title display area
+  // Title area starts at anchorRect.right; title width = TITLE_WIDTH (240px); offset = 100px
+  let left = anchorRect.right + TITLE_WIDTH + 100;
   if (left + POPUP_WIDTH > vw - margin) {
-    // Flip to left
+    // Flip to left of the cover if it doesn't fit
     left = anchorRect.left - POPUP_WIDTH - margin;
   }
   if (left < margin) left = margin;
@@ -687,6 +751,314 @@ function StatusDropdown({
   );
 }
 
+// ── Notes Hover Preview ───────────────────────────────────────────────────────
+
+interface NotesPreviewPopupProps {
+  notes: string;
+}
+
+function NotesPreviewPopup({ notes }: NotesPreviewPopupProps) {
+  return ReactDOM.createPortal(
+    <motion.div
+      data-ocid="manga.notes_preview.popover"
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      style={{
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: 400,
+        maxHeight: 300,
+        zIndex: 10001,
+        background: "#000",
+        border: `1.5px solid ${GOLD}`,
+        borderRadius: "0.5rem",
+        boxShadow:
+          "0 0 32px oklch(0.82 0.17 85 / 0.2), 0 8px 40px rgba(0,0,0,0.9)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        pointerEvents: "none",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "10px 14px 8px",
+          borderBottom: "1px solid oklch(0.82 0.17 85 / 0.2)",
+          flexShrink: 0,
+        }}
+      >
+        <p
+          style={{
+            color: GOLD_DIM,
+            fontSize: "0.7rem",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            margin: 0,
+          }}
+        >
+          Notes
+        </p>
+      </div>
+      {/* Notes content — scrollable, invisible scrollbar */}
+      <div
+        style={{
+          padding: "12px 14px",
+          overflowY: "auto",
+          scrollbarWidth: "none",
+          flex: 1,
+        }}
+      >
+        {notes ? (
+          <p
+            style={{
+              color: "oklch(0.78 0.06 85)",
+              fontSize: "0.8125rem",
+              lineHeight: 1.65,
+              margin: 0,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {notes}
+          </p>
+        ) : (
+          <p
+            style={{
+              color: "oklch(0.40 0.06 85)",
+              fontSize: "0.8125rem",
+              fontStyle: "italic",
+              margin: 0,
+            }}
+          >
+            No notes yet.
+          </p>
+        )}
+      </div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+// ── Notes Edit Popup ─────────────────────────────────────────────────────────
+
+interface NotesEditPopupProps {
+  entry: MangaEntry;
+  onSave: (notes: string) => void;
+  onClose: () => void;
+}
+
+function NotesEditPopup({ entry, onSave, onClose }: NotesEditPopupProps) {
+  const [notesValue, setNotesValue] = useState(entry.notes ?? "");
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!popupRef.current?.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [onClose]);
+
+  // Close on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return ReactDOM.createPortal(
+    <motion.div
+      ref={popupRef}
+      data-ocid="manga.notes_edit.dialog"
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      style={{
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: 400,
+        zIndex: 10002,
+        background: "#000",
+        border: `1.5px solid ${GOLD}`,
+        borderRadius: "0.5rem",
+        boxShadow:
+          "0 0 32px oklch(0.82 0.17 85 / 0.2), 0 8px 40px rgba(0,0,0,0.9)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        pointerEvents: "auto",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "12px 14px 10px",
+          borderBottom: "1px solid oklch(0.82 0.17 85 / 0.2)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <p
+          style={{
+            color: GOLD,
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            margin: 0,
+          }}
+        >
+          Edit Notes
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          data-ocid="manga.notes_edit.close_button"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: GOLD_FAINT,
+            padding: "2px",
+            fontSize: "1rem",
+            lineHeight: 1,
+            transition: "color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = GOLD;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = GOLD_FAINT;
+          }}
+          aria-label="Close notes editor"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Textarea */}
+      <div style={{ padding: "12px 14px" }}>
+        <textarea
+          data-ocid="manga.notes_edit.textarea"
+          value={notesValue}
+          onChange={(e) => setNotesValue(e.target.value)}
+          placeholder="Add your notes here..."
+          rows={6}
+          style={{
+            width: "100%",
+            background: "#0a0a0a",
+            border: "1px solid oklch(0.82 0.17 85 / 0.35)",
+            color: "oklch(0.85 0.06 85)",
+            borderRadius: "0.375rem",
+            padding: "10px 12px",
+            fontSize: "0.8125rem",
+            lineHeight: 1.65,
+            outline: "none",
+            resize: "vertical",
+            fontFamily: "inherit",
+            boxSizing: "border-box",
+            transition: "border-color 0.15s",
+            scrollbarWidth: "none",
+          }}
+          onFocus={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = GOLD_DIM;
+          }}
+          onBlur={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor =
+              "oklch(0.82 0.17 85 / 0.35)";
+          }}
+          // biome-ignore lint/a11y/noAutofocus: auto-focus is intentional for this edit popup
+          autoFocus
+        />
+      </div>
+
+      {/* Action buttons */}
+      <div
+        style={{
+          padding: "0 14px 14px",
+          display: "flex",
+          gap: "8px",
+          justifyContent: "flex-end",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          data-ocid="manga.notes_edit.cancel_button"
+          style={{
+            background: "transparent",
+            border: "1px solid oklch(0.82 0.17 85 / 0.35)",
+            color: GOLD_DIM,
+            borderRadius: "0.375rem",
+            padding: "6px 16px",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "border-color 0.15s, color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.borderColor = GOLD_DIM;
+            el.style.color = GOLD;
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.borderColor = "oklch(0.82 0.17 85 / 0.35)";
+            el.style.color = GOLD_DIM;
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSave(notesValue);
+            onClose();
+          }}
+          data-ocid="manga.notes_edit.save_button"
+          style={{
+            background: "transparent",
+            border: `1px solid ${GOLD}`,
+            color: GOLD,
+            borderRadius: "0.375rem",
+            padding: "6px 16px",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "background 0.15s, color 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.background = GOLD;
+            el.style.color = "#000";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.background = "transparent";
+            el.style.color = GOLD;
+          }}
+        >
+          Save
+        </button>
+      </div>
+    </motion.div>,
+    document.body,
+  );
+}
+
 // ── MangaCard ─────────────────────────────────────────────────────────────────
 
 export function MangaCard({
@@ -698,6 +1070,9 @@ export function MangaCard({
   onQuickStatusChange,
   onQuickChapterChange,
   onQuickRatingChange,
+  onQuickArtRatingChange,
+  onQuickCenLvlChange,
+  onQuickNotesChange,
 }: MangaCardProps) {
   const statusClass = STATUS_CLASS[entry.status as unknown as MangaStatus];
   const displayIndex = index + 1;
@@ -738,6 +1113,54 @@ export function MangaCard({
   );
   const [ratingInput, setRatingInput] = useState("");
   const ratingTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Art Rating edit popup
+  const [artRatingPopupOpen, setArtRatingPopupOpen] = useState(false);
+  const [artRatingAnchorRect, setArtRatingAnchorRect] =
+    useState<DOMRect | null>(null);
+  const [artRatingInput, setArtRatingInput] = useState("");
+  const artRatingTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Cen LVL edit popup
+  const [cenLvlPopupOpen, setCenLvlPopupOpen] = useState(false);
+  const [cenLvlAnchorRect, setCenLvlAnchorRect] = useState<DOMRect | null>(
+    null,
+  );
+  const [cenLvlInput, setCenLvlInput] = useState("");
+  const cenLvlTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Notes state
+  const [notesHoverVisible, setNotesHoverVisible] = useState(false);
+  const [notesEditOpen, setNotesEditOpen] = useState(false);
+  const notesHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasNotes = !!entry.notes?.trim();
+
+  const handleNotesMouseEnter = useCallback(() => {
+    if (notesHoverTimerRef.current) {
+      clearTimeout(notesHoverTimerRef.current);
+      notesHoverTimerRef.current = null;
+    }
+    setNotesHoverVisible(true);
+  }, []);
+
+  const handleNotesMouseLeave = useCallback(() => {
+    notesHoverTimerRef.current = setTimeout(() => {
+      setNotesHoverVisible(false);
+    }, 200);
+  }, []);
+
+  const handleNotesClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNotesHoverVisible(false);
+    setNotesEditOpen(true);
+  }, []);
+
+  // Cleanup notes timer on unmount
+  useEffect(() => {
+    return () => {
+      if (notesHoverTimerRef.current) clearTimeout(notesHoverTimerRef.current);
+    };
+  }, []);
 
   const showPopup = useCallback(() => {
     if (leaveTimerRef.current) {
@@ -827,6 +1250,34 @@ export function MangaCard({
     [entry.rating],
   );
 
+  const handleArtRatingClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const rect = artRatingTriggerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setArtRatingAnchorRect(rect);
+        setArtRatingInput(
+          entry.artRating != null ? String(entry.artRating) : "",
+        );
+        setArtRatingPopupOpen(true);
+      }
+    },
+    [entry.artRating],
+  );
+
+  const handleCenLvlClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const rect = cenLvlTriggerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setCenLvlAnchorRect(rect);
+        setCenLvlInput(entry.cenLvl != null ? String(entry.cenLvl) : "");
+        setCenLvlPopupOpen(true);
+      }
+    },
+    [entry.cenLvl],
+  );
+
   const handleChapterSave = useCallback(() => {
     const current = Number(chapterCurrentInput) || 0;
     const total = chapterTotalInput ? Number(chapterTotalInput) : undefined;
@@ -835,11 +1286,30 @@ export function MangaCard({
   }, [chapterCurrentInput, chapterTotalInput, entry, onQuickChapterChange]);
 
   const handleRatingSave = useCallback(() => {
-    const r = ratingInput ? Number(ratingInput) : undefined;
-    if (r !== undefined && (r < 1 || r > 10)) return;
-    onQuickRatingChange(entry, r);
+    const raw = ratingInput ? Number(ratingInput) : undefined;
+    if (raw !== undefined) {
+      if (raw < 1 || raw > 10) return;
+      const snapped = Math.round(raw * 2) / 2;
+      onQuickRatingChange(entry, snapped);
+    } else {
+      onQuickRatingChange(entry, undefined);
+    }
     setRatingPopupOpen(false);
   }, [ratingInput, entry, onQuickRatingChange]);
+
+  const handleArtRatingSave = useCallback(() => {
+    const r = artRatingInput ? Number(artRatingInput) : undefined;
+    if (r !== undefined && (r < 1 || r > 10)) return;
+    onQuickArtRatingChange(entry, r);
+    setArtRatingPopupOpen(false);
+  }, [artRatingInput, entry, onQuickArtRatingChange]);
+
+  const handleCenLvlSave = useCallback(() => {
+    const r = cenLvlInput ? Number(cenLvlInput) : undefined;
+    if (r !== undefined && (r < 1 || r > 10)) return;
+    onQuickCenLvlChange(entry, r);
+    setCenLvlPopupOpen(false);
+  }, [cenLvlInput, entry, onQuickCenLvlChange]);
 
   return (
     <motion.article
@@ -884,7 +1354,7 @@ export function MangaCard({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          borderRight: "1px solid oklch(0.82 0.17 85 / 0.2)",
+          borderRight: "1px solid transparent",
         }}
         onMouseEnter={showPopup}
         onMouseLeave={scheduleHide}
@@ -982,151 +1452,148 @@ export function MangaCard({
           justifyContent: "center",
           gap: "0.35rem",
           padding: "8px 14px",
-          borderLeft: "1px solid oklch(0.82 0.17 85 / 0.12)",
+          borderLeft: "1px solid transparent",
         }}
       >
-        {/* Top row: status + heart + action buttons */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {/* Clickable status badge */}
-            <button
-              ref={statusBadgeRef}
-              type="button"
-              data-ocid={`manga.status_badge.${displayIndex}`}
-              onClick={handleStatusBadgeClick}
-              className={`text-xs font-semibold px-1.5 py-0.5 rounded-sm ${statusClass}`}
-              style={{
-                background: "rgba(0,0,0,0.85)",
-                border: "1px solid currentColor",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-                transition: "opacity 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.75";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-              }}
-              aria-label={`Status: ${STATUS_LABELS[entry.status as unknown as MangaStatus]}. Click to change.`}
-              title="Click to change status"
-            >
-              {(entry.status as unknown as MangaStatus) ===
-              MangaStatus.Completed ? (
-                <span
-                  style={{
-                    background:
-                      "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
-                    backgroundSize: "200% auto",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    animation: "rainbow-shift 3s linear infinite",
-                  }}
-                >
-                  {STATUS_LABELS[entry.status as unknown as MangaStatus]}
-                </span>
-              ) : (
-                STATUS_LABELS[entry.status as unknown as MangaStatus]
-              )}
-            </button>
+        {/* Action buttons — absolutely positioned top-right, visible on hover */}
+        <div
+          className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          style={{ position: "absolute", top: 8, right: 8 }}
+        >
+          <button
+            type="button"
+            data-ocid={`manga.edit_button.${displayIndex}`}
+            onClick={() => onEdit(entry)}
+            className="w-7 h-7 rounded flex items-center justify-center transition-all duration-150"
+            style={{
+              background: "rgba(0,0,0,0.85)",
+              border: `1px solid ${GOLD}`,
+              color: GOLD,
+            }}
+            aria-label={`Edit ${entry.title}`}
+            title="Edit"
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = GOLD;
+              el.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "rgba(0,0,0,0.85)";
+              el.style.color = GOLD;
+            }}
+          >
+            <Edit2 size={12} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            data-ocid={`manga.delete_button.${displayIndex}`}
+            onClick={() => onDelete(entry)}
+            className="w-7 h-7 rounded flex items-center justify-center transition-all duration-150"
+            style={{
+              background: "rgba(0,0,0,0.85)",
+              border: "1px solid oklch(0.7 0.22 25)",
+              color: "oklch(0.7 0.22 25)",
+            }}
+            aria-label={`Delete ${entry.title}`}
+            title="Delete"
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "oklch(0.7 0.22 25)";
+              el.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "rgba(0,0,0,0.85)";
+              el.style.color = "oklch(0.7 0.22 25)";
+            }}
+          >
+            <Trash2 size={12} strokeWidth={2} />
+          </button>
+        </div>
 
-            {/* Heart / Favourite toggle — always visible */}
-            <button
-              type="button"
-              data-ocid={`manga.favourite_toggle.${displayIndex}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavourite(entry);
-              }}
-              className="w-6 h-6 flex items-center justify-center rounded transition-transform duration-150"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-              }}
-              aria-label={
-                entry.isFavourite
-                  ? "Remove from favourites"
-                  : "Add to favourites"
-              }
-              title={
-                entry.isFavourite
-                  ? "Remove from favourites"
-                  : "Add to favourites"
-              }
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-              }}
-            >
-              <Heart
-                size={14}
-                strokeWidth={entry.isFavourite ? 0 : 1.5}
+        {/* Status badge + heart — centered in the column */}
+        <div className="flex items-center gap-2">
+          {/* Clickable status badge */}
+          <button
+            ref={statusBadgeRef}
+            type="button"
+            data-ocid={`manga.status_badge.${displayIndex}`}
+            onClick={handleStatusBadgeClick}
+            className={`text-xs font-semibold px-1.5 py-0.5 rounded-sm ${statusClass}`}
+            style={{
+              background: "rgba(0,0,0,0.85)",
+              border: "1px solid currentColor",
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.opacity = "0.75";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.opacity = "1";
+            }}
+            aria-label={`Status: ${STATUS_LABELS[entry.status as unknown as MangaStatus]}. Click to change.`}
+            title="Click to change status"
+          >
+            {(entry.status as unknown as MangaStatus) ===
+            MangaStatus.Completed ? (
+              <span
                 style={{
-                  color: entry.isFavourite ? PINK : GOLD_DIM,
-                  fill: entry.isFavourite ? PINK : "transparent",
-                  transition: "color 0.2s, fill 0.2s",
+                  background:
+                    "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
+                  backgroundSize: "200% auto",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  animation: "rainbow-shift 3s linear infinite",
                 }}
-              />
-            </button>
-          </div>
+              >
+                {STATUS_LABELS[entry.status as unknown as MangaStatus]}
+              </span>
+            ) : (
+              STATUS_LABELS[entry.status as unknown as MangaStatus]
+            )}
+          </button>
 
-          {/* Action buttons — visible on hover */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              type="button"
-              data-ocid={`manga.edit_button.${displayIndex}`}
-              onClick={() => onEdit(entry)}
-              className="w-7 h-7 rounded flex items-center justify-center transition-all duration-150"
+          {/* Heart / Favourite toggle */}
+          <button
+            type="button"
+            data-ocid={`manga.favourite_toggle.${displayIndex}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavourite(entry);
+            }}
+            className="w-6 h-6 flex items-center justify-center rounded transition-transform duration-150"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+            }}
+            aria-label={
+              entry.isFavourite ? "Remove from favourites" : "Add to favourites"
+            }
+            title={
+              entry.isFavourite ? "Remove from favourites" : "Add to favourites"
+            }
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+            }}
+          >
+            <Heart
+              size={14}
+              strokeWidth={entry.isFavourite ? 0 : 1.5}
               style={{
-                background: "rgba(0,0,0,0.85)",
-                border: `1px solid ${GOLD}`,
-                color: GOLD,
+                color: entry.isFavourite ? PINK : GOLD_DIM,
+                fill: entry.isFavourite ? PINK : "transparent",
+                transition: "color 0.2s, fill 0.2s",
               }}
-              aria-label={`Edit ${entry.title}`}
-              title="Edit"
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = GOLD;
-                el.style.color = "#000";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "rgba(0,0,0,0.85)";
-                el.style.color = GOLD;
-              }}
-            >
-              <Edit2 size={12} strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              data-ocid={`manga.delete_button.${displayIndex}`}
-              onClick={() => onDelete(entry)}
-              className="w-7 h-7 rounded flex items-center justify-center transition-all duration-150"
-              style={{
-                background: "rgba(0,0,0,0.85)",
-                border: "1px solid oklch(0.7 0.22 25)",
-                color: "oklch(0.7 0.22 25)",
-              }}
-              aria-label={`Delete ${entry.title}`}
-              title="Delete"
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "oklch(0.7 0.22 25)";
-                el.style.color = "#000";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "rgba(0,0,0,0.85)";
-                el.style.color = "oklch(0.7 0.22 25)";
-              }}
-            >
-              <Trash2 size={12} strokeWidth={2} />
-            </button>
-          </div>
+            />
+          </button>
         </div>
 
         {/* Chapter progress — clickable */}
@@ -1230,6 +1697,99 @@ export function MangaCard({
             + Add rating
           </button>
         )}
+
+        {/* Art Rating + Cen LVL row */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          {/* Art Rating */}
+          <button
+            ref={artRatingTriggerRef}
+            type="button"
+            data-ocid={`manga.art_rating_edit.${displayIndex}`}
+            onClick={handleArtRatingClick}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: "2px 4px",
+              borderRadius: "0.25rem",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              width: "fit-content",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                "oklch(0.82 0.17 85 / 0.07)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
+            title="Click to edit Art rating"
+            aria-label="Edit Art rating"
+          >
+            <span style={{ fontSize: "0.7rem", color: GOLD_FAINT }}>Art</span>
+            {entry.artRating != null ? (
+              <span
+                style={
+                  entry.artRating >= 8
+                    ? RAINBOW_STYLE
+                    : { color: GOLD_DIM, fontSize: "0.75rem" }
+                }
+              >
+                {entry.artRating}
+              </span>
+            ) : (
+              <span style={{ color: GOLD_FAINT, fontSize: "0.7rem" }}>—</span>
+            )}
+          </button>
+
+          {/* Cen LVL */}
+          <button
+            ref={cenLvlTriggerRef}
+            type="button"
+            data-ocid={`manga.cen_lvl_edit.${displayIndex}`}
+            onClick={handleCenLvlClick}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: "2px 4px",
+              borderRadius: "0.25rem",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              width: "fit-content",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                "oklch(0.82 0.17 85 / 0.07)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
+            title="Click to edit Cen LVL"
+            aria-label="Edit Cen LVL"
+          >
+            <span style={{ fontSize: "0.7rem", color: GOLD_FAINT }}>
+              Cen LVL
+            </span>
+            {entry.cenLvl != null ? (
+              <span
+                style={
+                  entry.cenLvl <= 1
+                    ? RAINBOW_STYLE
+                    : { color: GOLD_DIM, fontSize: "0.75rem" }
+                }
+              >
+                {entry.cenLvl}
+              </span>
+            ) : (
+              <span style={{ color: GOLD_FAINT, fontSize: "0.7rem" }}>—</span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Genre column ─────────────────────────────────────────────────── */}
@@ -1245,7 +1805,7 @@ export function MangaCard({
           alignItems: "flex-start",
           gap: "0.3rem",
           padding: "8px 14px",
-          borderLeft: "1px solid oklch(0.82 0.17 85 / 0.12)",
+          borderLeft: "1px solid transparent",
         }}
       >
         {entry.genres.length > 0 ? (
@@ -1278,6 +1838,53 @@ export function MangaCard({
             —
           </span>
         )}
+      </div>
+
+      {/* ── Notes icon column ────────────────────────────────────────────── */}
+      <div
+        style={{
+          width: 48,
+          flexShrink: 0,
+          height: CARD_HEIGHT,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderLeft: "1px solid transparent",
+        }}
+      >
+        <button
+          type="button"
+          data-ocid={`manga.notes_toggle.${displayIndex}`}
+          onClick={handleNotesClick}
+          onMouseEnter={handleNotesMouseEnter}
+          onMouseLeave={handleNotesMouseLeave}
+          title={hasNotes ? "View / edit notes" : "Add notes"}
+          aria-label={hasNotes ? "View or edit notes" : "Add notes"}
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "6px",
+            borderRadius: "0.375rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "background 0.15s",
+          }}
+          onFocus={handleNotesMouseEnter}
+          onBlur={handleNotesMouseLeave}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <NotebookPen
+            size={16}
+            strokeWidth={1.5}
+            style={{
+              color: hasNotes ? NOTES_RED : GOLD_FAINT,
+              transition: "color 0.2s",
+              flexShrink: 0,
+            }}
+          />
+        </button>
       </div>
 
       {/* Cover Preview Popup via portal */}
@@ -1435,9 +2042,10 @@ export function MangaCard({
                 type="number"
                 min={1}
                 max={10}
+                step={0.5}
                 value={ratingInput}
                 onChange={(e) => setRatingInput(e.target.value)}
-                placeholder="e.g. 9"
+                placeholder="e.g. 9.5"
                 style={{
                   background: "#000",
                   border: `1px solid ${GOLD_DIM}`,
@@ -1515,6 +2123,244 @@ export function MangaCard({
               </div>
             </div>
           </InlinePopup>
+        )}
+      </AnimatePresence>
+
+      {/* Art Rating Edit Popup */}
+      <AnimatePresence>
+        {artRatingPopupOpen && artRatingAnchorRect && (
+          <InlinePopup
+            anchorRect={artRatingAnchorRect}
+            onClose={() => setArtRatingPopupOpen(false)}
+          >
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              <p
+                style={{
+                  color: GOLD_DIM,
+                  fontSize: "0.7rem",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  margin: 0,
+                }}
+              >
+                Art Rating (1–10)
+              </p>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step={0.5}
+                value={artRatingInput}
+                onChange={(e) => setArtRatingInput(e.target.value)}
+                placeholder="e.g. 7.5"
+                style={{
+                  background: "#000",
+                  border: `1px solid ${GOLD_DIM}`,
+                  color: GOLD,
+                  borderRadius: "0.25rem",
+                  padding: "4px 8px",
+                  fontSize: "0.8rem",
+                  outline: "none",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleArtRatingSave();
+                }}
+              />
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  type="button"
+                  onClick={handleArtRatingSave}
+                  data-ocid={`manga.art_rating_edit.save_button.${displayIndex}`}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${GOLD}`,
+                    color: GOLD,
+                    borderRadius: "0.25rem",
+                    padding: "4px 8px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "background 0.1s, color 0.1s",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = GOLD;
+                    el.style.color = "#000";
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = "transparent";
+                    el.style.color = GOLD;
+                  }}
+                >
+                  Save
+                </button>
+                {entry.artRating != null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onQuickArtRatingChange(entry, undefined);
+                      setArtRatingPopupOpen(false);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid oklch(0.7 0.22 25)",
+                      color: "oklch(0.7 0.22 25)",
+                      borderRadius: "0.25rem",
+                      padding: "4px 8px",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                      transition: "background 0.1s, color 0.1s",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = "oklch(0.7 0.22 25)";
+                      el.style.color = "#000";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = "transparent";
+                      el.style.color = "oklch(0.7 0.22 25)";
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </InlinePopup>
+        )}
+      </AnimatePresence>
+
+      {/* Cen LVL Edit Popup */}
+      <AnimatePresence>
+        {cenLvlPopupOpen && cenLvlAnchorRect && (
+          <InlinePopup
+            anchorRect={cenLvlAnchorRect}
+            onClose={() => setCenLvlPopupOpen(false)}
+          >
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              <p
+                style={{
+                  color: GOLD_DIM,
+                  fontSize: "0.7rem",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  margin: 0,
+                }}
+              >
+                Cen LVL (1–10)
+              </p>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step={0.5}
+                value={cenLvlInput}
+                onChange={(e) => setCenLvlInput(e.target.value)}
+                placeholder="e.g. 3.0"
+                style={{
+                  background: "#000",
+                  border: `1px solid ${GOLD_DIM}`,
+                  color: GOLD,
+                  borderRadius: "0.25rem",
+                  padding: "4px 8px",
+                  fontSize: "0.8rem",
+                  outline: "none",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCenLvlSave();
+                }}
+              />
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  type="button"
+                  onClick={handleCenLvlSave}
+                  data-ocid={`manga.cen_lvl_edit.save_button.${displayIndex}`}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${GOLD}`,
+                    color: GOLD,
+                    borderRadius: "0.25rem",
+                    padding: "4px 8px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "background 0.1s, color 0.1s",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = GOLD;
+                    el.style.color = "#000";
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = "transparent";
+                    el.style.color = GOLD;
+                  }}
+                >
+                  Save
+                </button>
+                {entry.cenLvl != null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onQuickCenLvlChange(entry, undefined);
+                      setCenLvlPopupOpen(false);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid oklch(0.7 0.22 25)",
+                      color: "oklch(0.7 0.22 25)",
+                      borderRadius: "0.25rem",
+                      padding: "4px 8px",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                      transition: "background 0.1s, color 0.1s",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = "oklch(0.7 0.22 25)";
+                      el.style.color = "#000";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = "transparent";
+                      el.style.color = "oklch(0.7 0.22 25)";
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </InlinePopup>
+        )}
+      </AnimatePresence>
+
+      {/* Notes Hover Preview */}
+      <AnimatePresence>
+        {notesHoverVisible && !notesEditOpen && (
+          <NotesPreviewPopup notes={entry.notes ?? ""} />
+        )}
+      </AnimatePresence>
+
+      {/* Notes Edit Popup */}
+      <AnimatePresence>
+        {notesEditOpen && (
+          <NotesEditPopup
+            entry={entry}
+            onSave={(notes) => onQuickNotesChange(entry, notes)}
+            onClose={() => setNotesEditOpen(false)}
+          />
         )}
       </AnimatePresence>
     </motion.article>

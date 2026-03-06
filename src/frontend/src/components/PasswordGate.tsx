@@ -1,29 +1,18 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Lock, ShieldAlert } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+const CORRECT_PASSWORD = "kamehamea";
+const MAX_ATTEMPTS = 3;
+const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes in ms
 
 const GOLD = "oklch(0.82 0.17 85)";
 const GOLD_DIM = "oklch(0.62 0.12 85)";
 const GOLD_FAINT = "oklch(0.40 0.08 85)";
-const CORRECT_PASSWORD = "kamehamea";
-const MAX_ATTEMPTS = 3;
-const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes in ms
-const FAIL_KEY = "phwa_fail_count";
-const LOCKOUT_KEY = "phwa_lockout_until";
+const ERROR_RED = "oklch(0.7 0.22 25)";
 
 interface PasswordGateProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actor: any;
+  principalText: string;
   onSuccess: () => void;
-}
-
-function getLockoutRemaining(): number {
-  const lockoutUntil = localStorage.getItem(LOCKOUT_KEY);
-  if (!lockoutUntil) return 0;
-  const remaining = Number.parseInt(lockoutUntil, 10) - Date.now();
-  return remaining > 0 ? remaining : 0;
 }
 
 function formatCountdown(ms: number): string {
@@ -33,356 +22,320 @@ function formatCountdown(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function PasswordGate({ actor, onSuccess }: PasswordGateProps) {
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [isLocked, setIsLocked] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+export function PasswordGate({ principalText, onSuccess }: PasswordGateProps) {
+  const trustedKey = `trusted_${principalText}`;
+  const lockoutKey = `lockout_${principalText}`;
+
+  const [passwordInput, setPasswordInput] = useState("");
+  const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState("");
+  const [checked, setChecked] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startLockoutTimer = useCallback((remainingMs: number) => {
-    setIsLocked(true);
-    setCountdown(remainingMs);
-
-    if (intervalRef.current) clearInterval(intervalRef.current);
-
-    intervalRef.current = setInterval(() => {
-      const remaining = getLockoutRemaining();
-      if (remaining <= 0) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setIsLocked(false);
-        setCountdown(0);
-        setError("");
-        localStorage.removeItem(LOCKOUT_KEY);
-        localStorage.removeItem(FAIL_KEY);
-      } else {
-        setCountdown(remaining);
-      }
-    }, 1000);
-  }, []);
-
-  // Check lockout state on mount
+  // On mount: check trusted status and lockout
   useEffect(() => {
-    const remaining = getLockoutRemaining();
-    if (remaining > 0) {
-      startLockoutTimer(remaining);
+    const trusted = localStorage.getItem(trustedKey);
+    if (trusted === "true") {
+      onSuccess();
+      return;
     }
-    // Focus input on mount if not locked
-    if (remaining <= 0) {
+
+    const lockoutExpiry = localStorage.getItem(lockoutKey);
+    if (lockoutExpiry) {
+      const expiry = Number(lockoutExpiry);
+      const now = Date.now();
+      if (expiry > now) {
+        setLockedUntil(expiry);
+      } else {
+        localStorage.removeItem(lockoutKey);
+      }
+    }
+
+    setChecked(true);
+  }, [trustedKey, lockoutKey, onSuccess]);
+
+  // Countdown timer when locked
+  useEffect(() => {
+    if (!lockedUntil) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    const tick = () => {
+      const remaining = lockedUntil - Date.now();
+      if (remaining <= 0) {
+        setLockedUntil(null);
+        setAttemptsLeft(MAX_ATTEMPTS);
+        setErrorMsg("");
+        localStorage.removeItem(lockoutKey);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      } else {
+        setCountdown(formatCountdown(remaining));
+      }
+    };
+
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [lockedUntil, lockoutKey]);
+
+  // Focus input when unlocked
+  useEffect(() => {
+    if (checked && !lockedUntil) {
       inputRef.current?.focus();
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [startLockoutTimer]);
+  }, [checked, lockedUntil]);
 
-  // Update countdown display continuously
-  useEffect(() => {
-    if (!isLocked) return;
-    const tick = setInterval(() => {
-      const remaining = getLockoutRemaining();
-      setCountdown(remaining);
-    }, 250);
-    return () => clearInterval(tick);
-  }, [isLocked]);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (isLocked || isSubmitting) return;
+    if (lockedUntil) return;
 
-      if (password === CORRECT_PASSWORD) {
-        setIsSubmitting(true);
-        setError("");
-        try {
-          // Mark trusted in backend (fire-and-forget — best effort)
-          if (actor) {
-            await (actor as { markTrusted: () => Promise<void> }).markTrusted();
-          }
-        } catch {
-          // non-fatal — proceed anyway
-        }
-        // Clear any previous fail counters
-        localStorage.removeItem(FAIL_KEY);
-        localStorage.removeItem(LOCKOUT_KEY);
-        setIsSubmitting(false);
-        onSuccess();
-      } else {
-        // Wrong password
-        const prevFails = Number.parseInt(
-          localStorage.getItem(FAIL_KEY) ?? "0",
-          10,
-        );
-        const newFails = prevFails + 1;
+    if (passwordInput === CORRECT_PASSWORD) {
+      localStorage.setItem(trustedKey, "true");
+      onSuccess();
+      return;
+    }
 
-        if (newFails >= MAX_ATTEMPTS) {
-          // Lock out
-          const lockUntil = Date.now() + LOCKOUT_DURATION;
-          localStorage.setItem(LOCKOUT_KEY, String(lockUntil));
-          localStorage.setItem(FAIL_KEY, "0");
-          setError("");
-          setPassword("");
-          startLockoutTimer(LOCKOUT_DURATION);
-        } else {
-          localStorage.setItem(FAIL_KEY, String(newFails));
-          const attemptsLeft = MAX_ATTEMPTS - newFails;
-          setError(
-            attemptsLeft === 1
-              ? "Incorrect password. 1 attempt remaining."
-              : `Incorrect password. ${attemptsLeft} attempts remaining.`,
-          );
-          setPassword("");
-          inputRef.current?.focus();
-        }
-      }
-    },
-    [password, isLocked, isSubmitting, actor, onSuccess, startLockoutTimer],
-  );
+    const newAttemptsLeft = attemptsLeft - 1;
+    setPasswordInput("");
 
-  return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
-      {/* Decorative background rings */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+    if (newAttemptsLeft <= 0) {
+      const expiry = Date.now() + LOCKOUT_DURATION;
+      localStorage.setItem(lockoutKey, String(expiry));
+      setLockedUntil(expiry);
+      setAttemptsLeft(MAX_ATTEMPTS);
+      setErrorMsg("");
+    } else {
+      setAttemptsLeft(newAttemptsLeft);
+      setErrorMsg(
+        newAttemptsLeft === 1
+          ? "Incorrect password. 1 attempt remaining."
+          : `Incorrect password. ${newAttemptsLeft} attempts remaining.`,
+      );
+    }
+  };
+
+  if (!checked) {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.04)" }}
-        />
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.07)" }}
-        />
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] h-[220px] rounded-full border"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.11)" }}
-        />
-        {/* Corner ornaments */}
-        <div
-          className="absolute top-6 left-6 w-16 h-16 border-l-2 border-t-2"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.3)" }}
-        />
-        <div
-          className="absolute top-6 right-6 w-16 h-16 border-r-2 border-t-2"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.3)" }}
-        />
-        <div
-          className="absolute bottom-6 left-6 w-16 h-16 border-l-2 border-b-2"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.3)" }}
-        />
-        <div
-          className="absolute bottom-6 right-6 w-16 h-16 border-r-2 border-b-2"
-          style={{ borderColor: "oklch(0.82 0.17 85 / 0.3)" }}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: GOLD_FAINT,
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
         />
       </div>
+    );
+  }
 
+  return (
+    <div
+      className="fixed inset-0 bg-black flex items-center justify-center"
+      style={{ zIndex: 9999 }}
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="relative w-full max-w-sm mx-4"
+        data-ocid="password_gate.dialog"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        style={{
+          width: "100%",
+          maxWidth: 380,
+          background: "#000",
+          border: `1.5px solid ${GOLD}`,
+          borderRadius: "0.75rem",
+          padding: "2rem",
+          boxShadow:
+            "0 0 40px oklch(0.82 0.17 85 / 0.2), 0 0 80px oklch(0.82 0.17 85 / 0.06)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.25rem",
+        }}
       >
-        <div
-          className="relative bg-black rounded-lg p-8 flex flex-col items-center gap-7"
+        {/* Subtitle */}
+        <p
           style={{
-            border: `1.5px solid ${GOLD}`,
-            boxShadow:
-              "0 0 40px oklch(0.82 0.17 85 / 0.15), 0 0 80px oklch(0.82 0.17 85 / 0.06)",
+            color: GOLD_DIM,
+            fontSize: "0.875rem",
+            fontWeight: 500,
+            letterSpacing: "0.04em",
+            textAlign: "center",
           }}
         >
-          {/* Top ornament line */}
-          <div
-            className="absolute -top-px left-1/4 right-1/4 h-px"
-            style={{ background: "oklch(0.91 0.18 85)" }}
-            aria-hidden="true"
-          />
+          Enter access password
+        </p>
 
-          {/* Icon */}
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.4 }}
-            className="flex items-center justify-center w-16 h-16 rounded-lg"
+        {lockedUntil ? (
+          /* Lockout state */
+          <div
             style={{
-              border: "1px solid oklch(0.82 0.17 85 / 0.5)",
-              background: "oklch(0.82 0.17 85 / 0.06)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "0.75rem",
             }}
           >
-            {isLocked ? (
-              <ShieldAlert
-                size={28}
-                style={{ color: "oklch(0.65 0.20 30)" }}
-                strokeWidth={1.5}
-              />
-            ) : (
-              <Lock size={28} style={{ color: GOLD }} strokeWidth={1.5} />
-            )}
-          </motion.div>
-
-          {/* Heading */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.25, duration: 0.4 }}
-            className="text-center space-y-2"
-          >
-            <p
-              className="text-xl font-semibold font-display tracking-wide"
-              style={{ color: GOLD }}
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                border: "1px solid oklch(0.82 0.17 85 / 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {isLocked ? "Access Locked" : "Enter Access Password"}
+              <span
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  color: ERROR_RED,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {countdown}
+              </span>
+            </div>
+            <p
+              style={{
+                color: ERROR_RED,
+                fontSize: "0.8rem",
+                textAlign: "center",
+              }}
+            >
+              Too many incorrect attempts.
             </p>
-            <p className="text-sm leading-relaxed" style={{ color: GOLD_DIM }}>
-              {isLocked
-                ? "Too many failed attempts."
-                : "This collection is password protected."}
+            <p
+              style={{
+                color: GOLD_FAINT,
+                fontSize: "0.75rem",
+                textAlign: "center",
+              }}
+            >
+              Try again when the timer reaches 0:00
             </p>
-          </motion.div>
-
-          {/* Form */}
-          <motion.form
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.4 }}
+          </div>
+        ) : (
+          /* Password form */
+          <form
             onSubmit={handleSubmit}
-            className="w-full space-y-4"
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
           >
-            {/* Password input row */}
-            <div className="relative">
-              <Input
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <input
                 ref={inputRef}
                 data-ocid="password_gate.input"
-                type={showPassword ? "text" : "password"}
-                value={password}
+                type="password"
+                value={passwordInput}
                 onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError("");
+                  setPasswordInput(e.target.value);
+                  if (errorMsg) setErrorMsg("");
                 }}
                 placeholder="Password"
-                disabled={isLocked || isSubmitting}
-                autoComplete="current-password"
-                className="w-full h-11 pr-10 bg-transparent font-mono text-sm"
                 style={{
-                  border: `1px solid ${error ? "oklch(0.65 0.20 30)" : "oklch(0.82 0.17 85 / 0.45)"}`,
+                  width: "100%",
+                  background: "#000",
+                  border: `1px solid ${errorMsg ? ERROR_RED : GOLD}`,
                   color: GOLD,
-                  caretColor: GOLD,
+                  borderRadius: "0.375rem",
+                  padding: "0.625rem 0.875rem",
+                  fontSize: "0.9375rem",
                   outline: "none",
+                  boxSizing: "border-box",
+                  transition: "border-color 0.15s",
+                  fontFamily: "inherit",
                 }}
-                aria-describedby={error ? "password-error" : undefined}
+                onFocus={(e) => {
+                  if (!errorMsg) {
+                    (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                  }
+                }}
+                autoComplete="current-password"
               />
-              <button
-                type="button"
-                data-ocid="password_gate.toggle"
-                onClick={() => setShowPassword((v) => !v)}
-                disabled={isLocked}
-                className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity"
-                style={{ color: GOLD_FAINT, opacity: isLocked ? 0.4 : 1 }}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+              {errorMsg && (
+                <p
+                  data-ocid="password_gate.error_state"
+                  style={{
+                    color: ERROR_RED,
+                    fontSize: "0.75rem",
+                    margin: 0,
+                  }}
+                >
+                  {errorMsg}
+                </p>
+              )}
+              {!errorMsg && attemptsLeft < MAX_ATTEMPTS && (
+                <p
+                  style={{ color: GOLD_FAINT, fontSize: "0.75rem", margin: 0 }}
+                >
+                  {attemptsLeft} attempt{attemptsLeft !== 1 ? "s" : ""}{" "}
+                  remaining
+                </p>
+              )}
             </div>
 
-            {/* Error message */}
-            {error && (
-              <motion.p
-                id="password-error"
-                data-ocid="password_gate.error_state"
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-sm text-center"
-                style={{ color: "oklch(0.65 0.20 30)" }}
-                role="alert"
-                aria-live="polite"
-              >
-                {error}
-              </motion.p>
-            )}
-
-            {/* Lockout countdown */}
-            {isLocked && countdown > 0 && (
-              <motion.div
-                data-ocid="password_gate.error_state"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center gap-1 py-1"
-              >
-                <output
-                  className="text-sm font-semibold tabular-nums"
-                  style={{ color: "oklch(0.65 0.20 30)" }}
-                  aria-live="polite"
-                  aria-label={`Locked out. Try again in ${formatCountdown(countdown)}`}
-                >
-                  Too many attempts. Try again in{" "}
-                  <span className="font-mono">
-                    {formatCountdown(countdown)}
-                  </span>
-                </output>
-                {/* Progress bar */}
-                <div
-                  className="w-full h-0.5 rounded-full overflow-hidden mt-1"
-                  style={{ background: "oklch(0.15 0 0)" }}
-                >
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{
-                      background: "oklch(0.65 0.20 30)",
-                      width: `${Math.round((countdown / LOCKOUT_DURATION) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-
-            {/* Submit button */}
-            <Button
-              data-ocid="password_gate.submit_button"
+            <button
               type="submit"
-              disabled={isLocked || isSubmitting || !password}
-              className="w-full h-11 font-semibold tracking-wide transition-all duration-200"
+              data-ocid="password_gate.submit_button"
+              disabled={!passwordInput.trim()}
               style={{
+                width: "100%",
                 background: "transparent",
-                border: `1.5px solid ${isLocked ? "oklch(0.82 0.17 85 / 0.25)" : GOLD}`,
-                color: isLocked ? "oklch(0.82 0.17 85 / 0.35)" : GOLD,
+                border: `1.5px solid ${GOLD}`,
+                color: GOLD,
+                borderRadius: "0.375rem",
+                padding: "0.625rem",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                cursor: passwordInput.trim() ? "pointer" : "not-allowed",
+                opacity: passwordInput.trim() ? 1 : 0.5,
+                transition: "background 0.15s, color 0.15s, opacity 0.15s",
+                fontFamily: "inherit",
               }}
               onMouseEnter={(e) => {
-                if (isLocked || isSubmitting) return;
-                const el = e.currentTarget;
-                el.style.background = GOLD;
-                el.style.color = "#000";
+                if (passwordInput.trim()) {
+                  const el = e.currentTarget;
+                  el.style.background = GOLD;
+                  el.style.color = "#000";
+                }
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget;
                 el.style.background = "transparent";
-                el.style.color = isLocked ? "oklch(0.82 0.17 85 / 0.35)" : GOLD;
-                el.style.borderColor = isLocked
-                  ? "oklch(0.82 0.17 85 / 0.25)"
-                  : GOLD;
+                el.style.color = GOLD;
               }}
             >
-              {isSubmitting ? "Verifying…" : "Unlock"}
-            </Button>
-          </motion.form>
-
-          {/* Bottom note */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.4 }}
-            className="text-xs text-center"
-            style={{ color: GOLD_FAINT }}
-          >
-            Secured by Internet Identity
-          </motion.p>
-
-          {/* Bottom ornament line */}
-          <div
-            className="absolute -bottom-px left-1/4 right-1/4 h-px"
-            style={{ background: "oklch(0.91 0.18 85)" }}
-            aria-hidden="true"
-          />
-        </div>
+              Unlock
+            </button>
+          </form>
+        )}
       </motion.div>
     </div>
   );

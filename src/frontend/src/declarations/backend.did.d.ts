@@ -10,15 +10,18 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type Int = bigint;
 export interface MangaEntry {
   'id' : string,
+  'cenLvl' : [] | [number],
   'status' : MangaStatus,
   'coverImageUrl' : [] | [string],
   'title' : string,
+  'artRating' : [] | [number],
   'altTitle1' : string,
   'altTitle2' : string,
-  'createdAt' : bigint,
-  'updatedAt' : bigint,
+  'createdAt' : Int,
+  'updatedAt' : Int,
   'synopsis' : string,
   'genres' : Array<string>,
   'notes' : string,
@@ -49,6 +52,8 @@ export interface _SERVICE {
       bigint,
       [] | [bigint],
       [] | [bigint],
+      [] | [number],
+      [] | [number],
       [] | [string],
       string,
       Array<string>,
@@ -63,8 +68,11 @@ export interface _SERVICE {
   'getEntries' : ActorMethod<[], Array<MangaEntry>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'registerCaller' : ActorMethod<[], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'toggleFavourite' : ActorMethod<[string], MangaEntry>,
+  'updateArtRating' : ActorMethod<[string, [] | [number]], MangaEntry>,
+  'updateCenLvl' : ActorMethod<[string, [] | [number]], MangaEntry>,
   'updateChapters' : ActorMethod<[string, bigint, [] | [bigint]], MangaEntry>,
   'updateEntry' : ActorMethod<
     [
@@ -77,6 +85,8 @@ export interface _SERVICE {
       bigint,
       [] | [bigint],
       [] | [bigint],
+      [] | [number],
+      [] | [number],
       [] | [string],
       string,
       Array<string>,

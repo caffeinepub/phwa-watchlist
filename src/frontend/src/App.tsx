@@ -13,6 +13,7 @@ import { Header } from "./components/Header";
 import { LoginPage } from "./components/LoginPage";
 import { MangaCard } from "./components/MangaCard";
 import { MangaFormModal } from "./components/MangaFormModal";
+import { PasswordGate } from "./components/PasswordGate";
 import { StatsBar } from "./components/StatsBar";
 import { Toolbar } from "./components/Toolbar";
 
@@ -50,13 +51,21 @@ export default function App() {
     updateStatus,
     updateChapters,
     updateRating,
+    updateArtRating,
+    updateCenLvl,
     pendingCount,
   } = useMangaSync();
 
+  // ── Password gate state ─────────────────────────────────────────────────────
+  const [passwordCleared, setPasswordCleared] = useState(false);
+
   // ── UI state ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
+  const [searchScope, setSearchScope] = useState<
+    "titles" | "notes" | "synopsis"
+  >("titles");
   const [statusFilter, setStatusFilter] = useState<MangaStatus | "all">("all");
-  const [genreFilter, setGenreFilter] = useState("");
+  const [genreFilter, setGenreFilter] = useState<string[]>([]);
   const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
 
@@ -77,12 +86,36 @@ export default function App() {
   useEffect(() => {
     if (actor && isAuthenticated && !isActorFetching) {
       const init = async () => {
-        // Register the caller as a user (silently ignore errors if already registered)
-        try {
-          await (actor as any)._initializeAccessControlWithSecret("register");
-        } catch {
-          // Ignore — user may already be registered or this method may not exist
+        // Step 1: Initialize access control. This registers the caller via the
+        // access-control `initialize()` path which is safe for new principals —
+        // it does NOT trap if the user is unregistered. Using an empty admin token
+        // means the caller gets registered as a plain user (not admin).
+        //
+        // This MUST happen before registerCaller() because registerCaller() calls
+        // getUserRole() which traps with "User is not registered" for new principals,
+        // causing all 5 retry attempts to fail and showing "Could not connect to backend".
+        const delays = [500, 1000, 1500, 2000, 3000];
+        let initialized = false;
+        for (let attempt = 0; attempt <= delays.length; attempt++) {
+          try {
+            await (actor as any)._initializeAccessControlWithSecret("");
+            initialized = true;
+            break;
+          } catch {
+            if (attempt < delays.length) {
+              await new Promise((r) => setTimeout(r, delays[attempt]));
+            }
+          }
         }
+
+        if (!initialized) {
+          toast.error(
+            "Could not connect to backend. Please refresh and try again.",
+          );
+          return;
+        }
+
+        // Step 2: Fetch entries. The caller is now registered and authorized.
         await fetchEntries(
           actor as unknown as Parameters<typeof fetchEntries>[0],
         );
@@ -102,79 +135,180 @@ export default function App() {
     return Array.from(set).sort();
   }, [entries]);
 
-  // ── Filtered + sorted entries ──────────────────────────────────────────────
-  const filteredEntries = useMemo(() => {
-    let result = entries;
+  // ── Stable sort order ──────────────────────────────────────────────────────
+  // We keep a stable ordered list of IDs that only re-sorts when the user
+  // explicitly changes a sort/filter option — NOT when individual entries are
+  // mutated (status, chapters, rating, etc.). This prevents the list from
+  // reshuffling under the user's mouse after every quick edit.
+  const stableOrderRef = useRef<string[]>([]);
+  const sortKeyRef = useRef("");
 
-    if (showFavouritesOnly) {
-      result = result.filter((e) => e.isFavourite === true);
-    }
+  // Build a string key from all options that should trigger a re-sort
+  const sortKey = `${sortOption}|${search}|${searchScope}|${statusFilter}|${genreFilter.join(",")}|${showFavouritesOnly}`;
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          e.genres.some((g) => g.toLowerCase().includes(q)) ||
-          e.notes.toLowerCase().includes(q) ||
-          e.altTitle1.toLowerCase().includes(q) ||
-          e.altTitle2.toLowerCase().includes(q),
-      );
-    }
+  // Helper: sort + filter entries into an ordered list of IDs
+  const buildSortedIds = useCallback(
+    (source: typeof entries) => {
+      let result = source;
 
-    if (statusFilter !== "all") {
-      result = result.filter((e) => e.status === statusFilter);
-    }
-
-    if (genreFilter) {
-      result = result.filter((e) => e.genres.includes(genreFilter));
-    }
-
-    // Sort
-    result = [...result].sort((a, b) => {
-      switch (sortOption) {
-        case "title-asc":
-          return a.title.localeCompare(b.title);
-        case "title-desc":
-          return b.title.localeCompare(a.title);
-        case "rating-desc": {
-          const ra = a.rating != null ? Number(a.rating) : -1;
-          const rb = b.rating != null ? Number(b.rating) : -1;
-          return rb - ra;
-        }
-        case "rating-asc": {
-          const ra = a.rating != null ? Number(a.rating) : 11;
-          const rb = b.rating != null ? Number(b.rating) : 11;
-          return ra - rb;
-        }
-        case "chapter-progress": {
-          const ap =
-            a.totalChapters != null && Number(a.totalChapters) > 0
-              ? Number(a.currentChapter) / Number(a.totalChapters)
-              : Number(a.currentChapter);
-          const bp =
-            b.totalChapters != null && Number(b.totalChapters) > 0
-              ? Number(b.currentChapter) / Number(b.totalChapters)
-              : Number(b.currentChapter);
-          return bp - ap;
-        }
-        default:
-          return Number(b.updatedAt - a.updatedAt);
+      if (showFavouritesOnly) {
+        result = result.filter((e) => e.isFavourite === true);
       }
-    });
 
-    return result;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        if (searchScope === "titles") {
+          result = result.filter(
+            (e) =>
+              e.title.toLowerCase().includes(q) ||
+              (e.altTitle1 ?? "").toLowerCase().includes(q) ||
+              (e.altTitle2 ?? "").toLowerCase().includes(q),
+          );
+        } else if (searchScope === "notes") {
+          result = result.filter((e) =>
+            (e.notes ?? "").toLowerCase().includes(q),
+          );
+        } else if (searchScope === "synopsis") {
+          result = result.filter((e) =>
+            (e.synopsis ?? "").toLowerCase().includes(q),
+          );
+        }
+      }
+
+      if (statusFilter !== "all") {
+        result = result.filter((e) => e.status === statusFilter);
+      }
+
+      if (genreFilter.length > 0) {
+        result = result.filter((e) =>
+          e.genres.some((g) => genreFilter.includes(g)),
+        );
+      }
+
+      result = [...result].sort((a, b) => {
+        switch (sortOption) {
+          case "title-asc":
+            return a.title.localeCompare(b.title);
+          case "title-desc":
+            return b.title.localeCompare(a.title);
+          case "rating-desc": {
+            const ra = a.rating != null ? Number(a.rating) : -1;
+            const rb = b.rating != null ? Number(b.rating) : -1;
+            return rb - ra;
+          }
+          case "rating-asc": {
+            const ra = a.rating != null ? Number(a.rating) : 11;
+            const rb = b.rating != null ? Number(b.rating) : 11;
+            return ra - rb;
+          }
+          case "chapter-progress": {
+            const ap =
+              a.totalChapters != null && Number(a.totalChapters) > 0
+                ? Number(a.currentChapter) / Number(a.totalChapters)
+                : Number(a.currentChapter);
+            const bp =
+              b.totalChapters != null && Number(b.totalChapters) > 0
+                ? Number(b.currentChapter) / Number(b.totalChapters)
+                : Number(b.currentChapter);
+            return bp - ap;
+          }
+          default:
+            return Number(b.updatedAt - a.updatedAt);
+        }
+      });
+
+      return result.map((e) => e.id);
+    },
+    [
+      sortOption,
+      search,
+      searchScope,
+      statusFilter,
+      genreFilter,
+      showFavouritesOnly,
+    ],
+  );
+
+  // ── Filtered + sorted entries ──────────────────────────────────────────────
+  // Re-sort only when sort/filter options change, not on data mutations.
+  const filteredEntries = useMemo(() => {
+    // Build an entry map for fast lookup
+    const entryMap = new Map(entries.map((e) => [e.id, e]));
+
+    // If sort key changed, rebuild the stable order
+    if (sortKey !== sortKeyRef.current) {
+      sortKeyRef.current = sortKey;
+      stableOrderRef.current = buildSortedIds(entries);
+    } else {
+      // Sort key unchanged — data was mutated (e.g. status change).
+      // Reconcile stable order: remove deleted IDs, append any new IDs at top.
+      const existingIds = new Set(stableOrderRef.current);
+      const newIds = entries
+        .filter((e) => !existingIds.has(e.id))
+        .map((e) => e.id);
+      const reconciled = [
+        ...newIds,
+        ...stableOrderRef.current.filter((id) => entryMap.has(id)),
+      ];
+
+      // Re-apply filters (but NOT re-sort) so deleted/status-filtered entries
+      // disappear correctly without changing positions of remaining entries.
+      let filtered = reconciled
+        .map((id) => entryMap.get(id))
+        .filter((e): e is (typeof entries)[0] => e !== undefined);
+
+      if (showFavouritesOnly) {
+        filtered = filtered.filter((e) => e.isFavourite === true);
+      }
+      if (statusFilter !== "all") {
+        filtered = filtered.filter((e) => e.status === statusFilter);
+      }
+      if (genreFilter.length > 0) {
+        filtered = filtered.filter((e) =>
+          e.genres.some((g) => genreFilter.includes(g)),
+        );
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        if (searchScope === "titles") {
+          filtered = filtered.filter(
+            (e) =>
+              e.title.toLowerCase().includes(q) ||
+              (e.altTitle1 ?? "").toLowerCase().includes(q) ||
+              (e.altTitle2 ?? "").toLowerCase().includes(q),
+          );
+        } else if (searchScope === "notes") {
+          filtered = filtered.filter((e) =>
+            (e.notes ?? "").toLowerCase().includes(q),
+          );
+        } else if (searchScope === "synopsis") {
+          filtered = filtered.filter((e) =>
+            (e.synopsis ?? "").toLowerCase().includes(q),
+          );
+        }
+      }
+
+      stableOrderRef.current = filtered.map((e) => e.id);
+      return filtered;
+    }
+
+    // Map stable IDs back to live entry objects
+    return stableOrderRef.current
+      .map((id) => entryMap.get(id))
+      .filter((e): e is (typeof entries)[0] => e !== undefined);
   }, [
     entries,
+    sortKey,
+    buildSortedIds,
     search,
+    searchScope,
     statusFilter,
     genreFilter,
-    sortOption,
     showFavouritesOnly,
   ]);
 
-  // ── Reset page when filters change ─────────────────────────────────────────
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally depends on filter values to reset page
+  // ── Reset page when filters/sort change ───────────────────────────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sortKey encodes all filter values
   useEffect(() => {
     if (isFirstFilterRender.current) {
       isFirstFilterRender.current = false;
@@ -182,7 +316,7 @@ export default function App() {
     }
     setCurrentPage(1);
     setPageInputValue("1");
-  }, [search, statusFilter, genreFilter, sortOption, showFavouritesOnly]);
+  }, [sortKey]);
 
   // ── Pagination computed values ──────────────────────────────────────────────
   const totalPages = Math.max(
@@ -221,12 +355,31 @@ export default function App() {
   const handleFormSubmit = useCallback(
     async (data: MangaFormData) => {
       try {
-        if (editingEntry) {
+        // Treat seed/temp entries (ids that never existed in the backend) as new adds
+        const isSeedOrTemp =
+          editingEntry &&
+          (editingEntry.id.startsWith("seed-") ||
+            editingEntry.id.startsWith("temp-"));
+
+        if (editingEntry && !isSeedOrTemp) {
           await updateEntry(
             actor as unknown as Parameters<typeof updateEntry>[0],
             editingEntry.id,
             { ...data, isFavourite: editingEntry.isFavourite },
           );
+          toast.success("Entry updated");
+        } else if (editingEntry && isSeedOrTemp) {
+          // Remove the old seed/temp entry first, then add as a real entry
+          await deleteEntry(
+            actor as unknown as Parameters<typeof deleteEntry>[0],
+            editingEntry.id,
+          ).catch(() => {
+            // seed entries don't exist on backend — deletion is best-effort
+          });
+          await addEntry(actor as unknown as Parameters<typeof addEntry>[0], {
+            ...data,
+            isFavourite: editingEntry.isFavourite ?? false,
+          });
           toast.success("Entry updated");
         } else {
           await addEntry(actor as unknown as Parameters<typeof addEntry>[0], {
@@ -240,7 +393,7 @@ export default function App() {
         throw new Error("Failed to save entry");
       }
     },
-    [editingEntry, actor, updateEntry, addEntry],
+    [editingEntry, actor, updateEntry, addEntry, deleteEntry],
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -261,6 +414,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     clear();
+    setPasswordCleared(false);
     toast("Signed out");
   }, [clear]);
 
@@ -308,6 +462,62 @@ export default function App() {
     [updateRating, actor],
   );
 
+  const handleQuickArtRatingChange = useCallback(
+    (entry: MangaEntry, artRating: number | undefined) => {
+      void updateArtRating(
+        actor as unknown as Parameters<typeof updateArtRating>[0],
+        entry.id,
+        artRating,
+      );
+    },
+    [updateArtRating, actor],
+  );
+
+  const handleQuickCenLvlChange = useCallback(
+    (entry: MangaEntry, cenLvl: number | undefined) => {
+      void updateCenLvl(
+        actor as unknown as Parameters<typeof updateCenLvl>[0],
+        entry.id,
+        cenLvl,
+      );
+    },
+    [updateCenLvl, actor],
+  );
+
+  const handleQuickNotesChange = useCallback(
+    async (entry: MangaEntry, notes: string) => {
+      try {
+        await updateEntry(
+          actor as unknown as Parameters<typeof updateEntry>[0],
+          entry.id,
+          {
+            title: entry.title,
+            synopsis: entry.synopsis,
+            altTitle1: entry.altTitle1,
+            altTitle2: entry.altTitle2,
+            status: entry.status as unknown as MangaStatus,
+            currentChapter: Number(entry.currentChapter),
+            totalChapters:
+              entry.totalChapters != null
+                ? Number(entry.totalChapters)
+                : undefined,
+            rating: entry.rating != null ? Number(entry.rating) : undefined,
+            artRating:
+              entry.artRating != null ? Number(entry.artRating) : undefined,
+            cenLvl: entry.cenLvl != null ? Number(entry.cenLvl) : undefined,
+            coverImageUrl: entry.coverImageUrl,
+            notes,
+            genres: entry.genres,
+            isFavourite: entry.isFavourite,
+          },
+        );
+      } catch {
+        toast.error("Failed to save notes");
+      }
+    },
+    [updateEntry, actor],
+  );
+
   // ── Loading screen ─────────────────────────────────────────────────────────
   if (isInitializing) {
     return (
@@ -331,6 +541,16 @@ export default function App() {
     return <LoginPage />;
   }
 
+  // ── Password gate ──────────────────────────────────────────────────────────
+  if (!passwordCleared) {
+    return (
+      <PasswordGate
+        principalText={identity.getPrincipal().toText()}
+        onSuccess={() => setPasswordCleared(true)}
+      />
+    );
+  }
+
   // ── Main app ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-dvh bg-black flex flex-col">
@@ -348,6 +568,9 @@ export default function App() {
         onLogout={handleLogout}
         isSyncing={isSyncing}
         pendingCount={pendingCount}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onGoToPage={goToPage}
       />
 
       <main className="flex-1 flex flex-col gap-4 py-4">
@@ -365,6 +588,8 @@ export default function App() {
         <Toolbar
           search={search}
           onSearchChange={setSearch}
+          searchScope={searchScope}
+          onSearchScopeChange={setSearchScope}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           genreFilter={genreFilter}
@@ -401,15 +626,15 @@ export default function App() {
                       className="rounded-lg overflow-hidden flex flex-row"
                       style={{
                         width: 1100,
-                        height: 140,
+                        height: 119,
                         border: "1px solid oklch(0.82 0.17 85 / 0.2)",
                       }}
                     >
                       {/* Cover skeleton */}
                       <div
                         style={{
-                          width: 135,
-                          height: 140,
+                          width: 115,
+                          height: 119,
                           flexShrink: 0,
                           background:
                             "linear-gradient(90deg, oklch(0.05 0 0) 25%, oklch(0.08 0 0) 50%, oklch(0.05 0 0) 75%)",
@@ -421,7 +646,7 @@ export default function App() {
                       <div
                         style={{
                           width: 240,
-                          height: 140,
+                          height: 119,
                           flexShrink: 0,
                           padding: "12px 10px",
                           display: "flex",
@@ -453,7 +678,7 @@ export default function App() {
                       <div
                         style={{
                           flex: 1,
-                          height: 140,
+                          height: 119,
                           padding: "12px 14px",
                           display: "flex",
                           flexDirection: "column",
@@ -501,7 +726,9 @@ export default function App() {
                   <p className="font-semibold" style={{ color: GOLD_DIM }}>
                     {showFavouritesOnly
                       ? "No favourites yet"
-                      : search || statusFilter !== "all" || genreFilter
+                      : search ||
+                          statusFilter !== "all" ||
+                          genreFilter.length > 0
                         ? "No results found"
                         : "Your watchlist is empty"}
                   </p>
@@ -511,7 +738,9 @@ export default function App() {
                   >
                     {showFavouritesOnly
                       ? "Click the heart icon on any title to favourite it"
-                      : search || statusFilter !== "all" || genreFilter
+                      : search ||
+                          statusFilter !== "all" ||
+                          genreFilter.length > 0
                         ? "Try adjusting your filters"
                         : "Add your first manga to get started"}
                   </p>
@@ -519,7 +748,7 @@ export default function App() {
                 {!showFavouritesOnly &&
                   !search &&
                   statusFilter === "all" &&
-                  !genreFilter && (
+                  genreFilter.length === 0 && (
                     <button
                       type="button"
                       onClick={handleAddClick}
@@ -565,6 +794,9 @@ export default function App() {
                       onQuickStatusChange={handleQuickStatusChange}
                       onQuickChapterChange={handleQuickChapterChange}
                       onQuickRatingChange={handleQuickRatingChange}
+                      onQuickArtRatingChange={handleQuickArtRatingChange}
+                      onQuickCenLvlChange={handleQuickCenLvlChange}
+                      onQuickNotesChange={handleQuickNotesChange}
                     />
                   ))}
                 </AnimatePresence>

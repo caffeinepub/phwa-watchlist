@@ -20,6 +20,8 @@ export interface MangaFormData {
   currentChapter: number;
   totalChapters?: number;
   rating?: number;
+  artRating?: number;
+  cenLvl?: number;
   coverImageUrl?: string;
   notes: string;
   genres: string[];
@@ -48,6 +50,16 @@ export type SyncOperation =
   | {
       type: "updateRating";
       payload: { id: string; rating?: number };
+      timestamp: number;
+    }
+  | {
+      type: "updateArtRating";
+      payload: { id: string; artRating?: number };
+      timestamp: number;
+    }
+  | {
+      type: "updateCenLvl";
+      payload: { id: string; cenLvl?: number };
       timestamp: number;
     };
 

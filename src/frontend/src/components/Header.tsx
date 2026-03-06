@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { LogOut, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { ArrowDown, ArrowUp, LogOut, RefreshCw, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
 const GOLD = "oklch(0.82 0.17 85)";
@@ -10,6 +11,9 @@ interface HeaderProps {
   onLogout: () => void;
   isSyncing: boolean;
   pendingCount: number;
+  currentPage: number;
+  totalPages: number;
+  onGoToPage: (page: number) => void;
 }
 
 function OnlineBadge({ isOnline }: { isOnline: boolean }) {
@@ -49,8 +53,40 @@ function OnlineBadge({ isOnline }: { isOnline: boolean }) {
   );
 }
 
-export function Header({ onLogout, isSyncing, pendingCount }: HeaderProps) {
+const navBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid oklch(0.82 0.17 85 / 0.5)",
+  color: GOLD_DIM,
+  borderRadius: "0.375rem",
+  width: 32,
+  height: 32,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flexShrink: 0,
+  transition: "border-color 0.15s, color 0.15s, background 0.15s",
+};
+
+export function Header({
+  onLogout,
+  isSyncing,
+  pendingCount,
+  currentPage,
+  totalPages,
+  onGoToPage,
+}: HeaderProps) {
   const isOnline = useOnlineStatus();
+  const [pageInputValue, setPageInputValue] = useState(String(currentPage));
+
+  // Sync input when currentPage prop changes (e.g. from bottom pagination)
+  const syncedPage = String(currentPage);
+  if (
+    pageInputValue !== syncedPage &&
+    document.activeElement?.getAttribute("data-ocid") !== "header.page_input"
+  ) {
+    setPageInputValue(syncedPage);
+  }
 
   return (
     <header
@@ -60,8 +96,8 @@ export function Header({ onLogout, isSyncing, pendingCount }: HeaderProps) {
         borderBottom: `1px solid ${GOLD}`,
       }}
     >
-      <div className="flex items-center justify-between px-4 md:px-6 h-14">
-        {/* Logo mark — no text */}
+      <div className="relative flex items-center px-4 md:px-6 h-14">
+        {/* Left: Logo + sync */}
         <div className="flex items-center gap-3">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
@@ -171,8 +207,105 @@ export function Header({ onLogout, isSyncing, pendingCount }: HeaderProps) {
           )}
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center gap-3">
+        {/* Center: scroll + page navigation — always visible */}
+        <div
+          className="absolute left-1/2 flex items-center gap-2"
+          style={{ transform: "translateX(-50%)" }}
+        >
+          {/* Arrow Up */}
+          <button
+            type="button"
+            data-ocid="header.scroll_top_button"
+            aria-label="Scroll to top"
+            title="Go to top"
+            style={navBtnStyle}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = GOLD;
+              el.style.color = GOLD;
+              el.style.background = "oklch(0.82 0.17 85 / 0.08)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = "oklch(0.82 0.17 85 / 0.5)";
+              el.style.color = GOLD_DIM;
+              el.style.background = "transparent";
+            }}
+          >
+            <ArrowUp size={14} strokeWidth={2} />
+          </button>
+
+          {/* Page number input */}
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={pageInputValue}
+            data-ocid="header.page_input"
+            aria-label="Go to page"
+            title={`Page ${currentPage} of ${totalPages}`}
+            onChange={(e) => setPageInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const parsed = Number.parseInt(pageInputValue, 10);
+                if (!Number.isNaN(parsed)) onGoToPage(parsed);
+              }
+            }}
+            onBlur={() => {
+              const parsed = Number.parseInt(pageInputValue, 10);
+              if (!Number.isNaN(parsed)) {
+                onGoToPage(parsed);
+              } else {
+                setPageInputValue(String(currentPage));
+              }
+            }}
+            className="text-center text-xs"
+            style={{
+              width: 52,
+              height: 32,
+              background: "#000",
+              border: "1px solid oklch(0.82 0.17 85 / 0.5)",
+              color: GOLD,
+              borderRadius: "0.375rem",
+              padding: "3px 6px",
+              outline: "none",
+              flexShrink: 0,
+            }}
+          />
+
+          {/* Arrow Down */}
+          <button
+            type="button"
+            data-ocid="header.scroll_bottom_button"
+            aria-label="Scroll to bottom"
+            title="Go to bottom"
+            style={navBtnStyle}
+            onClick={() =>
+              window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: "smooth",
+              })
+            }
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = GOLD;
+              el.style.color = GOLD;
+              el.style.background = "oklch(0.82 0.17 85 / 0.08)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = "oklch(0.82 0.17 85 / 0.5)";
+              el.style.color = GOLD_DIM;
+              el.style.background = "transparent";
+            }}
+          >
+            <ArrowDown size={14} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Right: online badge + sign out */}
+        <div className="flex items-center gap-3 ml-auto">
           <OnlineBadge isOnline={isOnline} />
 
           <Button

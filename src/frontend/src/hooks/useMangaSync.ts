@@ -22,6 +22,8 @@ interface SerializedEntry {
   currentChapter: string;
   totalChapters?: string;
   rating?: string;
+  artRating?: number;
+  cenLvl?: number;
   coverImageUrl?: string;
   notes: string;
   genres: string[];
@@ -44,6 +46,8 @@ function serializeEntry(entry: MangaEntry): SerializedEntry {
     currentChapter: entry.currentChapter.toString(),
     totalChapters: entry.totalChapters?.toString(),
     rating: entry.rating?.toString(),
+    artRating: entry.artRating,
+    cenLvl: entry.cenLvl,
     createdAt: entry.createdAt.toString(),
     updatedAt: entry.updatedAt.toString(),
     isFavourite: entry.isFavourite,
@@ -65,6 +69,8 @@ function deserializeEntry(s: SerializedEntry): MangaEntry {
     totalChapters:
       s.totalChapters != null ? BigInt(s.totalChapters) : undefined,
     rating: s.rating != null ? BigInt(s.rating) : undefined,
+    artRating: s.artRating,
+    cenLvl: s.cenLvl,
     createdAt: BigInt(s.createdAt),
     updatedAt: BigInt(s.updatedAt),
     isFavourite: s.isFavourite ?? false,
@@ -205,6 +211,8 @@ interface ActorLike {
     currentChapter: bigint,
     totalChapters: bigint | null,
     rating: bigint | null,
+    artRating: number | null,
+    cenLvl: number | null,
     coverImageUrl: string | null,
     notes: string,
     genres: string[],
@@ -220,6 +228,8 @@ interface ActorLike {
     currentChapter: bigint,
     totalChapters: bigint | null,
     rating: bigint | null,
+    artRating: number | null,
+    cenLvl: number | null,
     coverImageUrl: string | null,
     notes: string,
     genres: string[],
@@ -234,6 +244,8 @@ interface ActorLike {
     totalChapters: bigint | null,
   ): Promise<MangaEntry>;
   updateRating(id: string, rating: bigint | null): Promise<MangaEntry>;
+  updateArtRating(id: string, artRating: number | null): Promise<MangaEntry>;
+  updateCenLvl(id: string, cenLvl: number | null): Promise<MangaEntry>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -266,6 +278,16 @@ interface UseMangaSyncReturn {
     actor: ActorLike | null,
     id: string,
     rating: number | undefined,
+  ) => Promise<void>;
+  updateArtRating: (
+    actor: ActorLike | null,
+    id: string,
+    artRating: number | undefined,
+  ) => Promise<void>;
+  updateCenLvl: (
+    actor: ActorLike | null,
+    id: string,
+    cenLvl: number | undefined,
   ) => Promise<void>;
   pendingCount: number;
 }
@@ -303,9 +325,13 @@ export function useMangaSync(): UseMangaSyncReturn {
               d.altTitle1,
               d.altTitle2,
               d.status as BackendMangaStatus,
-              BigInt(d.currentChapter),
-              d.totalChapters != null ? BigInt(d.totalChapters) : null,
-              d.rating != null ? BigInt(d.rating) : null,
+              BigInt(Math.round(d.currentChapter)),
+              d.totalChapters != null
+                ? BigInt(Math.round(d.totalChapters))
+                : null,
+              d.rating != null ? BigInt(Math.round(d.rating)) : null,
+              d.artRating ?? null,
+              d.cenLvl ?? null,
               d.coverImageUrl?.startsWith("data:")
                 ? null
                 : (d.coverImageUrl ?? null),
@@ -322,9 +348,13 @@ export function useMangaSync(): UseMangaSyncReturn {
               d.altTitle1,
               d.altTitle2,
               d.status as BackendMangaStatus,
-              BigInt(d.currentChapter),
-              d.totalChapters != null ? BigInt(d.totalChapters) : null,
-              d.rating != null ? BigInt(d.rating) : null,
+              BigInt(Math.round(d.currentChapter)),
+              d.totalChapters != null
+                ? BigInt(Math.round(d.totalChapters))
+                : null,
+              d.rating != null ? BigInt(Math.round(d.rating)) : null,
+              d.artRating ?? null,
+              d.cenLvl ?? null,
               d.coverImageUrl?.startsWith("data:")
                 ? null
                 : (d.coverImageUrl ?? null),
@@ -345,15 +375,26 @@ export function useMangaSync(): UseMangaSyncReturn {
             const d = op.payload;
             await actor.updateChapters(
               d.id,
-              BigInt(d.currentChapter),
-              d.totalChapters != null ? BigInt(d.totalChapters) : null,
+              BigInt(Math.round(d.currentChapter)),
+              d.totalChapters != null
+                ? BigInt(Math.round(d.totalChapters))
+                : null,
             );
           } else if (op.type === "updateRating") {
             const d = op.payload;
             await actor.updateRating(
               d.id,
-              d.rating != null ? BigInt(d.rating) : null,
+              d.rating != null ? BigInt(Math.round(d.rating)) : null,
             );
+          } else if (op.type === "updateArtRating") {
+            const d = op.payload;
+            await actor.updateArtRating(
+              d.id,
+              d.artRating != null ? d.artRating : null,
+            );
+          } else if (op.type === "updateCenLvl") {
+            const d = op.payload;
+            await actor.updateCenLvl(d.id, d.cenLvl != null ? d.cenLvl : null);
           }
         } catch {
           remaining.push(op);
@@ -363,11 +404,22 @@ export function useMangaSync(): UseMangaSyncReturn {
       saveQueue(remaining);
       setPendingCount(remaining.length);
 
-      // Refresh from backend
+      // Refresh from backend — merge locally-stored covers back in
       try {
         const fresh = await actor.getEntries();
-        setEntries(fresh);
-        saveCache(fresh);
+        // Preserve any locally-cached base64 cover images since backend never stores them
+        const cachedCovers: Record<string, string> = {};
+        const cached = loadCache();
+        for (const c of cached) {
+          if (c.coverImageUrl?.startsWith("data:")) {
+            cachedCovers[c.id] = c.coverImageUrl;
+          }
+        }
+        const merged = fresh.map((e) =>
+          cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
+        );
+        setEntries(merged);
+        saveCache(merged);
       } catch {
         // ignore
       }
@@ -381,11 +433,26 @@ export function useMangaSync(): UseMangaSyncReturn {
     setIsLoading(true);
     try {
       const fresh = await actor.getEntries();
-      const result = fresh.length > 0 ? fresh : SEED_ENTRIES;
-      setEntries(result);
-      if (fresh.length > 0) saveCache(fresh);
+      // Merge locally-stored cover images (base64 data URLs) back into backend entries,
+      // because the backend never persists base64 images.
+      const cachedCovers: Record<string, string> = {};
+      const cached = loadCache();
+      for (const c of cached) {
+        if (c.coverImageUrl?.startsWith("data:")) {
+          cachedCovers[c.id] = c.coverImageUrl;
+        }
+      }
+      const merged = fresh.map((e) =>
+        cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
+      );
+      // Always use the backend's authoritative list (even if empty).
+      // NEVER fall back to SEED_ENTRIES here — seed IDs don't exist in the backend,
+      // so any subsequent save/edit would fail with "Entry not found".
+      setEntries(merged);
+      saveCache(merged);
     } catch {
-      // keep whatever is in state (cache or seed)
+      // Backend call failed (transient error after confirmed registration).
+      // Keep whatever is currently in state — do NOT overwrite with seed data.
     } finally {
       setIsLoading(false);
     }
@@ -406,6 +473,8 @@ export function useMangaSync(): UseMangaSyncReturn {
         totalChapters:
           data.totalChapters != null ? BigInt(data.totalChapters) : undefined,
         rating: data.rating != null ? BigInt(data.rating) : undefined,
+        artRating: data.artRating,
+        cenLvl: data.cenLvl,
         coverImageUrl: data.coverImageUrl,
         notes: data.notes,
         genres: data.genres,
@@ -440,9 +509,13 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.altTitle1,
           data.altTitle2,
           data.status as BackendMangaStatus,
-          BigInt(data.currentChapter),
-          data.totalChapters != null ? BigInt(data.totalChapters) : null,
-          data.rating != null ? BigInt(data.rating) : null,
+          BigInt(Math.round(data.currentChapter)),
+          data.totalChapters != null
+            ? BigInt(Math.round(data.totalChapters))
+            : null,
+          data.rating != null ? BigInt(Math.round(data.rating)) : null,
+          data.artRating ?? null,
+          data.cenLvl ?? null,
           data.coverImageUrl?.startsWith("data:")
             ? null
             : (data.coverImageUrl ?? null),
@@ -494,6 +567,8 @@ export function useMangaSync(): UseMangaSyncReturn {
                     ? BigInt(data.totalChapters)
                     : undefined,
                 rating: data.rating != null ? BigInt(data.rating) : undefined,
+                artRating: data.artRating,
+                cenLvl: data.cenLvl,
                 coverImageUrl: data.coverImageUrl,
                 notes: data.notes,
                 genres: data.genres,
@@ -526,9 +601,13 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.altTitle1,
           data.altTitle2,
           data.status as BackendMangaStatus,
-          BigInt(data.currentChapter),
-          data.totalChapters != null ? BigInt(data.totalChapters) : null,
-          data.rating != null ? BigInt(data.rating) : null,
+          BigInt(Math.round(data.currentChapter)),
+          data.totalChapters != null
+            ? BigInt(Math.round(data.totalChapters))
+            : null,
+          data.rating != null ? BigInt(Math.round(data.rating)) : null,
+          data.artRating ?? null,
+          data.cenLvl ?? null,
           data.coverImageUrl?.startsWith("data:")
             ? null
             : (data.coverImageUrl ?? null),
@@ -625,7 +704,14 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.toggleFavourite(id);
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === id ? updated : e));
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
           saveCache(next);
           return next;
         });
@@ -669,7 +755,14 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.updateStatus(id, status);
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === id ? updated : e));
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
           saveCache(next);
           return next;
         });
@@ -727,11 +820,18 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.updateChapters(
           id,
-          BigInt(currentChapter),
-          totalChapters != null ? BigInt(totalChapters) : null,
+          BigInt(Math.round(currentChapter)),
+          totalChapters != null ? BigInt(Math.round(totalChapters)) : null,
         );
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === id ? updated : e));
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
           saveCache(next);
           return next;
         });
@@ -779,10 +879,129 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.updateRating(
           id,
-          rating != null ? BigInt(rating) : null,
+          rating != null ? BigInt(Math.round(rating)) : null,
         );
         setEntries((prev) => {
-          const next = prev.map((e) => (e.id === id ? updated : e));
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
+  const updateArtRating = useCallback(
+    async (
+      actor: ActorLike | null,
+      id: string,
+      artRating: number | undefined,
+    ) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) => (e.id === id ? { ...e, artRating } : e));
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "updateArtRating",
+          payload: { id, artRating },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.updateArtRating(
+          id,
+          artRating != null ? artRating : null,
+        );
+        setEntries((prev) => {
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
+  const updateCenLvl = useCallback(
+    async (actor: ActorLike | null, id: string, cenLvl: number | undefined) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) => (e.id === id ? { ...e, cenLvl } : e));
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "updateCenLvl",
+          payload: { id, cenLvl },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.updateCenLvl(
+          id,
+          cenLvl != null ? cenLvl : null,
+        );
+        setEntries((prev) => {
+          const next = prev.map((e) =>
+            e.id === id
+              ? {
+                  ...updated,
+                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                }
+              : e,
+          );
           saveCache(next);
           return next;
         });
@@ -812,6 +1031,8 @@ export function useMangaSync(): UseMangaSyncReturn {
     updateStatus,
     updateChapters,
     updateRating,
+    updateArtRating,
+    updateCenLvl,
     pendingCount,
   };
 }
