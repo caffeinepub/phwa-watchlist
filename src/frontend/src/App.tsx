@@ -66,7 +66,7 @@ export default function App() {
   >("titles");
   const [statusFilter, setStatusFilter] = useState<MangaStatus | "all">("all");
   const [genreFilter, setGenreFilter] = useState<string[]>([]);
-  const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
+  const [sortOption, setSortOption] = useState<SortOption>("title-asc");
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
 
   // ── Pagination ──────────────────────────────────────────────────────────────
@@ -86,20 +86,18 @@ export default function App() {
   useEffect(() => {
     if (actor && isAuthenticated && !isActorFetching) {
       const init = async () => {
-        // Step 1: Initialize access control. This registers the caller via the
-        // access-control `initialize()` path which is safe for new principals —
-        // it does NOT trap if the user is unregistered. Using an empty admin token
-        // means the caller gets registered as a plain user (not admin).
-        //
-        // This MUST happen before registerCaller() because registerCaller() calls
-        // getUserRole() which traps with "User is not registered" for new principals,
-        // causing all 5 retry attempts to fail and showing "Could not connect to backend".
+        // Step 1: Register the caller using the safe initialization path.
+        // _initializeAccessControlWithSecret uses AccessControl.initialize()
+        // which safely registers any unregistered non-anonymous caller as a
+        // #user without trapping — unlike registerCaller() which calls
+        // getUserRole() first and Runtime.trap()s for brand new principals.
+        // Retry up to 6 times to handle transient canister startup delays.
         const delays = [500, 1000, 1500, 2000, 3000];
-        let initialized = false;
+        let registered = false;
         for (let attempt = 0; attempt <= delays.length; attempt++) {
           try {
             await (actor as any)._initializeAccessControlWithSecret("");
-            initialized = true;
+            registered = true;
             break;
           } catch {
             if (attempt < delays.length) {
@@ -108,7 +106,7 @@ export default function App() {
           }
         }
 
-        if (!initialized) {
+        if (!registered) {
           toast.error(
             "Could not connect to backend. Please refresh and try again.",
           );

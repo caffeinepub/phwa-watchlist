@@ -472,7 +472,8 @@ export function useMangaSync(): UseMangaSyncReturn {
         currentChapter: BigInt(data.currentChapter),
         totalChapters:
           data.totalChapters != null ? BigInt(data.totalChapters) : undefined,
-        rating: data.rating != null ? BigInt(data.rating) : undefined,
+        rating:
+          data.rating != null ? BigInt(Math.round(data.rating)) : undefined,
         artRating: data.artRating,
         cenLvl: data.cenLvl,
         coverImageUrl: data.coverImageUrl,
@@ -566,7 +567,10 @@ export function useMangaSync(): UseMangaSyncReturn {
                   data.totalChapters != null
                     ? BigInt(data.totalChapters)
                     : undefined,
-                rating: data.rating != null ? BigInt(data.rating) : undefined,
+                rating:
+                  data.rating != null
+                    ? BigInt(Math.round(data.rating))
+                    : undefined,
                 artRating: data.artRating,
                 cenLvl: data.cenLvl,
                 coverImageUrl: data.coverImageUrl,
@@ -857,7 +861,10 @@ export function useMangaSync(): UseMangaSyncReturn {
         previous = prev.find((e) => e.id === id);
         const next = prev.map((e) =>
           e.id === id
-            ? { ...e, rating: rating != null ? BigInt(rating) : undefined }
+            ? {
+                ...e,
+                rating: rating != null ? BigInt(Math.round(rating)) : undefined,
+              }
             : e,
         );
         saveCache(next);

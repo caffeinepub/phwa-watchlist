@@ -1,22 +1,19 @@
 # Phwa Watchlist
 
 ## Current State
-The app has a Motoko backend with an authorization system that requires callers to have the `#user` role before any data operations (getEntries, addEntry, updateEntry, etc.). The `getUserRole` function traps with "User is not registered" if a caller has no role assigned. There is no auto-registration path -- new users who log in via Internet Identity are never assigned a role, causing all backend calls to fail with "Unauthorized" or a trap. This manifests as "failed to save entry" errors on the frontend. The watchlist card width is currently 1300px with `minWidth: 1300` in multiple places.
+Full manga watchlist app with Internet Identity login, password gate, offline sync, and per-user manga entries stored in the backend canister. The backend uses an authorization module (`access-control.mo`) where `getUserRole()` calls `Runtime.trap("User is not registered")` when a principal has no role entry. `registerCaller()` in `main.mo` calls `getUserRole()` first to check the current role -- this causes a hard trap for any brand new principal, making `registerCaller()` always fail and the frontend unable to connect.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `registerUser` public function in the backend that any non-anonymous caller can invoke to self-assign the `#user` role (if they don't already have one). This is safe because every authenticated user should be a `#user`.
-- Frontend call to `actor.registerUser()` immediately after the actor is ready and the user is authenticated, before any data fetching.
+- Nothing new
 
 ### Modify
-- Watchlist card width from 1300px to 1100px (update all `minWidth: 1300`, `width: 1300`, and `style={{ minWidth: 1300 }}` occurrences in App.tsx and MangaCard.tsx).
+- `access-control.mo`: Change `getUserRole()` so that when a principal is not found in the role map, it returns `#guest` instead of calling `Runtime.trap("User is not registered")`. This makes unregistered principals behave the same as anonymous principals -- as guests -- which is safe and correct since `registerCaller()` in `main.mo` already handles the `#guest` case by assigning `#user`.
 
 ### Remove
-- Nothing.
+- Nothing
 
 ## Implementation Plan
-1. Add `registerUser` to `main.mo` -- checks if caller is non-anonymous and has no role, then assigns `#user`.
-2. Update `backend.d.ts` to add `registerUser(): Promise<void>`.
-3. In `App.tsx`, call `actor.registerUser()` after actor is ready and authenticated (inside the `useEffect` that calls `fetchEntries`, before or alongside it).
-4. Change all `1300` width values to `1100` in `App.tsx` and `MangaCard.tsx`.
+1. Regenerate the backend with the single change: in `getUserRole`, replace `Runtime.trap("User is not registered")` with `return #guest` for the `case (null)` branch.
+2. Keep all other backend logic (MangaEntry, all CRUD functions, MixinAuthorization, etc.) exactly as-is.
