@@ -564,7 +564,7 @@ export function MangaFormModal({
                       type="number"
                       min={1}
                       max={10}
-                      step={0.5}
+                      step={0.1}
                       value={artRating}
                       onChange={(e) => setArtRating(e.target.value)}
                       placeholder="e.g. 7.5"
@@ -588,7 +588,7 @@ export function MangaFormModal({
                       type="number"
                       min={1}
                       max={10}
-                      step={0.5}
+                      step={0.1}
                       value={cenLvl}
                       onChange={(e) => setCenLvl(e.target.value)}
                       placeholder="e.g. 3.0"

@@ -1,6 +1,6 @@
 import {
   BookOpen,
-  ChevronRight,
+  ChevronsRight,
   Edit2,
   Heart,
   NotebookPen,
@@ -1477,7 +1477,7 @@ export function MangaCard({
               flexShrink: 0,
             }}
           >
-            <ChevronRight size={14} strokeWidth={2} />
+            <ChevronsRight size={14} strokeWidth={2} />
           </button>
         )}
       </div>
@@ -1766,8 +1766,15 @@ export function MangaCard({
         }}
       >
         {entry.genres.length > 0 ? (
-          <>
-            {entry.genres.slice(0, 4).map((g) => (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0.25rem",
+              width: "100%",
+            }}
+          >
+            {entry.genres.slice(0, 8).map((g) => (
               <span
                 key={g}
                 className="text-xs px-1.5 py-0.5 rounded-sm"
@@ -1775,21 +1782,23 @@ export function MangaCard({
                   border: "1px solid oklch(0.82 0.17 85 / 0.4)",
                   color: GOLD_DIM,
                   whiteSpace: "nowrap",
-                  display: "inline-block",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  display: "block",
                 }}
               >
                 {g}
               </span>
             ))}
-            {entry.genres.length > 4 && (
+            {entry.genres.length > 8 && (
               <span
                 className="text-xs px-1.5 py-0.5 rounded-sm"
                 style={{ color: GOLD_FAINT }}
               >
-                +{entry.genres.length - 4}
+                +{entry.genres.length - 8}
               </span>
             )}
-          </>
+          </div>
         ) : (
           <span className="text-xs" style={{ color: GOLD_FAINT }}>
             —
@@ -2205,7 +2214,7 @@ export function MangaCard({
                 type="number"
                 min={1}
                 max={10}
-                step={0.5}
+                step={0.1}
                 value={artRatingInput}
                 onChange={(e) => setArtRatingInput(e.target.value)}
                 placeholder="e.g. 7.5"
@@ -2315,7 +2324,7 @@ export function MangaCard({
                 type="number"
                 min={1}
                 max={10}
-                step={0.5}
+                step={0.1}
                 value={cenLvlInput}
                 onChange={(e) => setCenLvlInput(e.target.value)}
                 placeholder="e.g. 3.0"
