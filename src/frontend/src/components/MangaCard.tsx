@@ -40,7 +40,7 @@ const RAINBOW_STYLE: React.CSSProperties = {
   WebkitTextFillColor: "transparent",
   backgroundClip: "text",
   animation: "rainbow-shift 3s linear infinite",
-  fontSize: "0.75rem",
+  fontSize: "0.875rem",
 };
 
 interface MangaCardProps {
@@ -127,7 +127,7 @@ function StarRating({ rating }: { rating: number }) {
         />
       ))}
       <span
-        className="ml-1 text-xs"
+        className="ml-1"
         style={
           rating >= 8
             ? {
@@ -138,8 +138,9 @@ function StarRating({ rating }: { rating: number }) {
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
                 animation: "rainbow-shift 3s linear infinite",
+                fontSize: "0.875rem",
               }
-            : { color: GOLD_DIM }
+            : { color: GOLD_DIM, fontSize: "0.875rem" }
         }
       >
         {rating}/10
@@ -1552,90 +1553,6 @@ export function MangaCard({
           </button>
         </div>
 
-        {/* Status badge + heart — centered in the column */}
-        <div className="flex items-center gap-2">
-          {/* Clickable status badge */}
-          <button
-            ref={statusBadgeRef}
-            type="button"
-            data-ocid={`manga.status_badge.${displayIndex}`}
-            onClick={handleStatusBadgeClick}
-            className={`text-xs font-semibold px-1.5 py-0.5 rounded-sm ${statusClass}`}
-            style={{
-              background: "rgba(0,0,0,0.85)",
-              border: "1px solid currentColor",
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-              transition: "opacity 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "0.75";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "1";
-            }}
-            aria-label={`Status: ${STATUS_LABELS[entry.status as unknown as MangaStatus]}. Click to change.`}
-            title="Click to change status"
-          >
-            {(entry.status as unknown as MangaStatus) ===
-            MangaStatus.Completed ? (
-              <span
-                style={{
-                  background:
-                    "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
-                  backgroundSize: "200% auto",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  animation: "rainbow-shift 3s linear infinite",
-                }}
-              >
-                {STATUS_LABELS[entry.status as unknown as MangaStatus]}
-              </span>
-            ) : (
-              STATUS_LABELS[entry.status as unknown as MangaStatus]
-            )}
-          </button>
-
-          {/* Heart / Favourite toggle */}
-          <button
-            type="button"
-            data-ocid={`manga.favourite_toggle.${displayIndex}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavourite(entry);
-            }}
-            className="w-6 h-6 flex items-center justify-center rounded transition-transform duration-150"
-            style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-            }}
-            aria-label={
-              entry.isFavourite ? "Remove from favourites" : "Add to favourites"
-            }
-            title={
-              entry.isFavourite ? "Remove from favourites" : "Add to favourites"
-            }
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-            }}
-          >
-            <Heart
-              size={14}
-              strokeWidth={entry.isFavourite ? 0 : 1.5}
-              style={{
-                color: entry.isFavourite ? PINK : GOLD_DIM,
-                fill: entry.isFavourite ? PINK : "transparent",
-                transition: "color 0.2s, fill 0.2s",
-              }}
-            />
-          </button>
-        </div>
-
         {/* Chapter progress — clickable */}
         <button
           ref={chapterTriggerRef}
@@ -1774,7 +1691,7 @@ export function MangaCard({
                 style={
                   entry.artRating >= 8
                     ? RAINBOW_STYLE
-                    : { color: GOLD_DIM, fontSize: "0.75rem" }
+                    : { color: GOLD_DIM, fontSize: "0.875rem" }
                 }
               >
                 {entry.artRating}
@@ -1820,7 +1737,7 @@ export function MangaCard({
                 style={
                   entry.cenLvl <= 1
                     ? RAINBOW_STYLE
-                    : { color: GOLD_DIM, fontSize: "0.75rem" }
+                    : { color: GOLD_DIM, fontSize: "0.875rem" }
                 }
               >
                 {entry.cenLvl}
@@ -1835,7 +1752,7 @@ export function MangaCard({
       {/* ── Genre column ─────────────────────────────────────────────────── */}
       <div
         style={{
-          width: 180,
+          width: 250,
           flexShrink: 0,
           height: CARD_HEIGHT,
           overflow: "hidden",
@@ -1878,6 +1795,102 @@ export function MangaCard({
             —
           </span>
         )}
+      </div>
+
+      {/* ── Status + Favourite column ────────────────────────────────────── */}
+      <div
+        style={{
+          width: 100,
+          flexShrink: 0,
+          height: CARD_HEIGHT,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+          borderLeft: "1px solid transparent",
+        }}
+      >
+        {/* Clickable status badge */}
+        <button
+          ref={statusBadgeRef}
+          type="button"
+          data-ocid={`manga.status_badge.${displayIndex}`}
+          onClick={handleStatusBadgeClick}
+          className={`text-xs font-semibold px-1.5 py-0.5 rounded-sm ${statusClass}`}
+          style={{
+            background: "rgba(0,0,0,0.85)",
+            border: "1px solid currentColor",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            transition: "opacity 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.opacity = "0.75";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.opacity = "1";
+          }}
+          aria-label={`Status: ${STATUS_LABELS[entry.status as unknown as MangaStatus]}. Click to change.`}
+          title="Click to change status"
+        >
+          {(entry.status as unknown as MangaStatus) ===
+          MangaStatus.Completed ? (
+            <span
+              style={{
+                background:
+                  "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0099ff, #aa00ff, #ff0000)",
+                backgroundSize: "200% auto",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                animation: "rainbow-shift 3s linear infinite",
+              }}
+            >
+              {STATUS_LABELS[entry.status as unknown as MangaStatus]}
+            </span>
+          ) : (
+            STATUS_LABELS[entry.status as unknown as MangaStatus]
+          )}
+        </button>
+
+        {/* Heart / Favourite toggle */}
+        <button
+          type="button"
+          data-ocid={`manga.favourite_toggle.${displayIndex}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavourite(entry);
+          }}
+          className="w-6 h-6 flex items-center justify-center rounded transition-transform duration-150"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+          }}
+          aria-label={
+            entry.isFavourite ? "Remove from favourites" : "Add to favourites"
+          }
+          title={
+            entry.isFavourite ? "Remove from favourites" : "Add to favourites"
+          }
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+          }}
+        >
+          <Heart
+            size={14}
+            strokeWidth={entry.isFavourite ? 0 : 1.5}
+            style={{
+              color: entry.isFavourite ? PINK : GOLD_DIM,
+              fill: entry.isFavourite ? PINK : "transparent",
+              transition: "color 0.2s, fill 0.2s",
+            }}
+          />
+        </button>
       </div>
 
       {/* ── Notes icon column ────────────────────────────────────────────── */}

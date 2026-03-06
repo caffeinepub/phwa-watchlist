@@ -194,7 +194,7 @@ export default function App() {
 
       if (genreFilter.length > 0) {
         result = result.filter((e) =>
-          e.genres.some((g) => genreFilter.includes(g)),
+          genreFilter.every((g) => e.genres.includes(g)),
         );
       }
 
@@ -278,7 +278,7 @@ export default function App() {
       }
       if (genreFilter.length > 0) {
         filtered = filtered.filter((e) =>
-          e.genres.some((g) => genreFilter.includes(g)),
+          genreFilter.every((g) => e.genres.includes(g)),
         );
       }
       if (search.trim()) {

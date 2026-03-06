@@ -11,6 +11,7 @@ export type { MangaEntry };
 const CACHE_KEY = "manga_cache";
 const QUEUE_KEY = "manga_sync_queue";
 const LAST_SYNCED_KEY = "manga_last_synced";
+const COVER_PREFIX = "manga_cover_";
 
 // Module-level flag so the warning is shown at most once per page load
 let _storageWarningShown = false;
@@ -138,6 +139,52 @@ function saveQueue(queue: SyncOperation[]): void {
   } catch {
     // silently ignore
   }
+}
+
+// ── Dedicated cover image store ───────────────────────────────────────────────
+// Covers are stored independently of the main cache so bulk-import state races
+// can never wipe them out. Each cover lives in its own localStorage key.
+
+export function saveCover(id: string, dataUrl: string): void {
+  try {
+    localStorage.setItem(COVER_PREFIX + id, dataUrl);
+  } catch {
+    // storage full — silently ignore
+  }
+}
+
+export function loadCover(id: string): string | undefined {
+  try {
+    return localStorage.getItem(COVER_PREFIX + id) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function deleteCover(id: string): void {
+  try {
+    localStorage.removeItem(COVER_PREFIX + id);
+  } catch {
+    // ignore
+  }
+}
+
+/** Build a map of id → coverDataUrl from all cover keys in localStorage. */
+function loadAllCovers(): Record<string, string> {
+  const map: Record<string, string> = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(COVER_PREFIX)) {
+        const id = key.slice(COVER_PREFIX.length);
+        const val = localStorage.getItem(key);
+        if (val) map[id] = val;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return map;
 }
 
 // ── Sample seed data (shown when offline / before first sync) ─────────────────
@@ -437,19 +484,12 @@ export function useMangaSync(): UseMangaSyncReturn {
       saveQueue(remaining);
       setPendingCount(remaining.length);
 
-      // Refresh from backend — merge locally-stored covers back in
+      // Refresh from backend — merge covers from dedicated cover store
       try {
         const fresh = await actor.getEntries();
-        // Preserve any locally-cached base64 cover images since backend never stores them
-        const cachedCovers: Record<string, string> = {};
-        const cached = loadCache();
-        for (const c of cached) {
-          if (c.coverImageUrl?.startsWith("data:")) {
-            cachedCovers[c.id] = c.coverImageUrl;
-          }
-        }
+        const coverMap = loadAllCovers();
         const merged = fresh.map((e) =>
-          cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
+          coverMap[e.id] ? { ...e, coverImageUrl: coverMap[e.id] } : e,
         );
         setEntries(merged);
         saveCache(merged);
@@ -468,17 +508,11 @@ export function useMangaSync(): UseMangaSyncReturn {
       setIsLoading(true);
       try {
         const fresh = await actor.getEntries();
-        // Merge locally-stored cover images (base64 data URLs) back into backend entries,
-        // because the backend never persists base64 images.
-        const cachedCovers: Record<string, string> = {};
-        const cached = loadCache();
-        for (const c of cached) {
-          if (c.coverImageUrl?.startsWith("data:")) {
-            cachedCovers[c.id] = c.coverImageUrl;
-          }
-        }
+        // Merge covers from the dedicated per-ID cover store (immune to race conditions).
+        // The backend never persists base64 images, so we always re-inject from localStorage.
+        const coverMap = loadAllCovers();
         const merged = fresh.map((e) =>
-          cachedCovers[e.id] ? { ...e, coverImageUrl: cachedCovers[e.id] } : e,
+          coverMap[e.id] ? { ...e, coverImageUrl: coverMap[e.id] } : e,
         );
         // Always use the backend's authoritative list (even if empty).
         // NEVER fall back to SEED_ENTRIES here — seed IDs don't exist in the backend,
@@ -541,6 +575,11 @@ export function useMangaSync(): UseMangaSyncReturn {
         return;
       }
 
+      // Save cover to dedicated store under tempId immediately, before any state races
+      if (data.coverImageUrl?.startsWith("data:")) {
+        saveCover(tempId, data.coverImageUrl);
+      }
+
       try {
         const created = await actor.addEntry(
           data.title,
@@ -555,17 +594,21 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.rating != null ? BigInt(Math.round(data.rating)) : null,
           data.artRating ?? null,
           data.cenLvl ?? null,
-          data.coverImageUrl?.startsWith("data:")
-            ? null
-            : (data.coverImageUrl ?? null),
+          null, // never send base64 to backend
           data.notes,
           data.genres,
           data.isFavourite ?? false,
         );
-        // Preserve local data URL cover since backend never stores base64
+        // Remap cover from tempId → real backend ID
+        if (data.coverImageUrl?.startsWith("data:")) {
+          saveCover(created.id, data.coverImageUrl);
+          deleteCover(tempId);
+        }
         const finalEntry = {
           ...created,
-          coverImageUrl: created.coverImageUrl ?? data.coverImageUrl,
+          coverImageUrl: data.coverImageUrl?.startsWith("data:")
+            ? data.coverImageUrl
+            : (created.coverImageUrl ?? undefined),
         };
         setEntries((prev) => {
           const next = prev.map((e) => (e.id === tempId ? finalEntry : e));
@@ -574,6 +617,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         });
         recordSync();
       } catch {
+        deleteCover(tempId);
         setEntries((prev) => {
           const next = prev.filter((e) => e.id !== tempId);
           saveCache(next);
@@ -651,18 +695,19 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.rating != null ? BigInt(Math.round(data.rating)) : null,
           data.artRating ?? null,
           data.cenLvl ?? null,
-          data.coverImageUrl?.startsWith("data:")
-            ? null
-            : (data.coverImageUrl ?? null),
+          null, // never send base64 to backend
           data.notes,
           data.genres,
           data.isFavourite ?? false,
         );
-        // Preserve local data URL cover since backend never stores base64
-        const finalEntry = {
-          ...updated,
-          coverImageUrl: updated.coverImageUrl ?? data.coverImageUrl,
-        };
+        // Persist cover to dedicated store
+        if (data.coverImageUrl?.startsWith("data:")) {
+          saveCover(id, data.coverImageUrl);
+        }
+        const coverUrl = data.coverImageUrl?.startsWith("data:")
+          ? data.coverImageUrl
+          : (updated.coverImageUrl ?? loadCover(id));
+        const finalEntry = { ...updated, coverImageUrl: coverUrl };
         setEntries((prev) => {
           const next = prev.map((e) => (e.id === id ? finalEntry : e));
           saveCache(next);
@@ -705,6 +750,7 @@ export function useMangaSync(): UseMangaSyncReturn {
 
       try {
         await actor.deleteEntry(id);
+        deleteCover(id);
         recordSync();
       } catch {
         if (removed) {
@@ -753,7 +799,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
@@ -805,7 +852,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
@@ -875,7 +923,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
@@ -937,7 +986,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
@@ -996,7 +1046,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
@@ -1051,7 +1102,8 @@ export function useMangaSync(): UseMangaSyncReturn {
             e.id === id
               ? {
                   ...updated,
-                  coverImageUrl: updated.coverImageUrl ?? e.coverImageUrl,
+                  coverImageUrl:
+                    loadCover(id) ?? updated.coverImageUrl ?? e.coverImageUrl,
                 }
               : e,
           );
