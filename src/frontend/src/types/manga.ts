@@ -8,6 +8,7 @@ export enum MangaStatus {
   Reading = "Reading",
   Dropped = "Dropped",
   Completed = "Completed",
+  Incomplete = "Incomplete",
 }
 
 export interface MangaFormData {
@@ -22,6 +23,7 @@ export interface MangaFormData {
   coverImageUrl?: string;
   notes: string;
   genres: string[];
+  isFavourite?: boolean;
 }
 
 export type SyncOperation =
@@ -31,7 +33,23 @@ export type SyncOperation =
       payload: MangaFormData & { id: string };
       timestamp: number;
     }
-  | { type: "delete"; payload: { id: string }; timestamp: number };
+  | { type: "delete"; payload: { id: string }; timestamp: number }
+  | { type: "toggleFavourite"; payload: { id: string }; timestamp: number }
+  | {
+      type: "updateStatus";
+      payload: { id: string; status: string };
+      timestamp: number;
+    }
+  | {
+      type: "updateChapters";
+      payload: { id: string; currentChapter: number; totalChapters?: number };
+      timestamp: number;
+    }
+  | {
+      type: "updateRating";
+      payload: { id: string; rating?: number };
+      timestamp: number;
+    };
 
 export type SortOption =
   | "title-asc"
@@ -47,6 +65,7 @@ export const STATUS_LABELS: Record<MangaStatus, string> = {
   [MangaStatus.OnHold]: "On Hold",
   [MangaStatus.Dropped]: "Dropped",
   [MangaStatus.PlanToRead]: "Plan to Read",
+  [MangaStatus.Incomplete]: "Incomplete",
 };
 
 export const STATUS_CLASS: Record<MangaStatus, string> = {
@@ -55,4 +74,5 @@ export const STATUS_CLASS: Record<MangaStatus, string> = {
   [MangaStatus.OnHold]: "status-onhold",
   [MangaStatus.Dropped]: "status-dropped",
   [MangaStatus.PlanToRead]: "status-plantoread",
+  [MangaStatus.Incomplete]: "status-incomplete",
 };

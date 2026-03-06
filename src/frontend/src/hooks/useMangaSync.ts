@@ -27,6 +27,7 @@ interface SerializedEntry {
   genres: string[];
   createdAt: string;
   updatedAt: string;
+  isFavourite: boolean;
 }
 
 function serializeEntry(entry: MangaEntry): SerializedEntry {
@@ -45,6 +46,7 @@ function serializeEntry(entry: MangaEntry): SerializedEntry {
     rating: entry.rating?.toString(),
     createdAt: entry.createdAt.toString(),
     updatedAt: entry.updatedAt.toString(),
+    isFavourite: entry.isFavourite,
   };
 }
 
@@ -65,6 +67,7 @@ function deserializeEntry(s: SerializedEntry): MangaEntry {
     rating: s.rating != null ? BigInt(s.rating) : undefined,
     createdAt: BigInt(s.createdAt),
     updatedAt: BigInt(s.updatedAt),
+    isFavourite: s.isFavourite ?? false,
   };
 }
 
@@ -131,6 +134,7 @@ export const SEED_ENTRIES: MangaEntry[] = [
     genres: ["Dark Fantasy", "Action", "Horror"],
     createdAt: NOW,
     updatedAt: NOW,
+    isFavourite: false,
   },
   {
     id: "seed-2",
@@ -148,6 +152,7 @@ export const SEED_ENTRIES: MangaEntry[] = [
     genres: ["Historical", "Action", "Drama"],
     createdAt: NOW,
     updatedAt: NOW,
+    isFavourite: false,
   },
   {
     id: "seed-3",
@@ -165,6 +170,7 @@ export const SEED_ENTRIES: MangaEntry[] = [
     genres: ["Fantasy", "Adventure", "Action"],
     createdAt: NOW,
     updatedAt: NOW,
+    isFavourite: false,
   },
   {
     id: "seed-4",
@@ -182,6 +188,7 @@ export const SEED_ENTRIES: MangaEntry[] = [
     genres: ["Action", "Horror", "Supernatural"],
     createdAt: NOW,
     updatedAt: NOW,
+    isFavourite: false,
   },
 ];
 
@@ -201,6 +208,7 @@ interface ActorLike {
     coverImageUrl: string | null,
     notes: string,
     genres: string[],
+    isFavourite: boolean,
   ): Promise<MangaEntry>;
   updateEntry(
     id: string,
@@ -215,8 +223,17 @@ interface ActorLike {
     coverImageUrl: string | null,
     notes: string,
     genres: string[],
+    isFavourite: boolean,
   ): Promise<MangaEntry>;
   deleteEntry(id: string): Promise<void>;
+  toggleFavourite(id: string): Promise<MangaEntry>;
+  updateStatus(id: string, status: BackendMangaStatus): Promise<MangaEntry>;
+  updateChapters(
+    id: string,
+    currentChapter: bigint,
+    totalChapters: bigint | null,
+  ): Promise<MangaEntry>;
+  updateRating(id: string, rating: bigint | null): Promise<MangaEntry>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -233,6 +250,23 @@ interface UseMangaSyncReturn {
     data: MangaFormData,
   ) => Promise<void>;
   deleteEntry: (actor: ActorLike | null, id: string) => Promise<void>;
+  toggleFavourite: (actor: ActorLike | null, id: string) => Promise<void>;
+  updateStatus: (
+    actor: ActorLike | null,
+    id: string,
+    status: BackendMangaStatus,
+  ) => Promise<void>;
+  updateChapters: (
+    actor: ActorLike | null,
+    id: string,
+    currentChapter: number,
+    totalChapters: number | undefined,
+  ) => Promise<void>;
+  updateRating: (
+    actor: ActorLike | null,
+    id: string,
+    rating: number | undefined,
+  ) => Promise<void>;
   pendingCount: number;
 }
 
@@ -272,9 +306,12 @@ export function useMangaSync(): UseMangaSyncReturn {
               BigInt(d.currentChapter),
               d.totalChapters != null ? BigInt(d.totalChapters) : null,
               d.rating != null ? BigInt(d.rating) : null,
-              d.coverImageUrl ?? null,
+              d.coverImageUrl?.startsWith("data:")
+                ? null
+                : (d.coverImageUrl ?? null),
               d.notes,
               d.genres,
+              d.isFavourite ?? false,
             );
           } else if (op.type === "update") {
             const d = op.payload;
@@ -288,12 +325,35 @@ export function useMangaSync(): UseMangaSyncReturn {
               BigInt(d.currentChapter),
               d.totalChapters != null ? BigInt(d.totalChapters) : null,
               d.rating != null ? BigInt(d.rating) : null,
-              d.coverImageUrl ?? null,
+              d.coverImageUrl?.startsWith("data:")
+                ? null
+                : (d.coverImageUrl ?? null),
               d.notes,
               d.genres,
+              d.isFavourite ?? false,
             );
           } else if (op.type === "delete") {
             await actor.deleteEntry(op.payload.id);
+          } else if (op.type === "toggleFavourite") {
+            await actor.toggleFavourite(op.payload.id);
+          } else if (op.type === "updateStatus") {
+            await actor.updateStatus(
+              op.payload.id,
+              op.payload.status as BackendMangaStatus,
+            );
+          } else if (op.type === "updateChapters") {
+            const d = op.payload;
+            await actor.updateChapters(
+              d.id,
+              BigInt(d.currentChapter),
+              d.totalChapters != null ? BigInt(d.totalChapters) : null,
+            );
+          } else if (op.type === "updateRating") {
+            const d = op.payload;
+            await actor.updateRating(
+              d.id,
+              d.rating != null ? BigInt(d.rating) : null,
+            );
           }
         } catch {
           remaining.push(op);
@@ -351,6 +411,7 @@ export function useMangaSync(): UseMangaSyncReturn {
         genres: data.genres,
         createdAt: now,
         updatedAt: now,
+        isFavourite: data.isFavourite ?? false,
       };
 
       setEntries((prev) => {
@@ -382,9 +443,12 @@ export function useMangaSync(): UseMangaSyncReturn {
           BigInt(data.currentChapter),
           data.totalChapters != null ? BigInt(data.totalChapters) : null,
           data.rating != null ? BigInt(data.rating) : null,
-          data.coverImageUrl ?? null,
+          data.coverImageUrl?.startsWith("data:")
+            ? null
+            : (data.coverImageUrl ?? null),
           data.notes,
           data.genres,
+          data.isFavourite ?? false,
         );
         setEntries((prev) => {
           const next = prev.map((e) => (e.id === tempId ? created : e));
@@ -428,6 +492,7 @@ export function useMangaSync(): UseMangaSyncReturn {
                 coverImageUrl: data.coverImageUrl,
                 notes: data.notes,
                 genres: data.genres,
+                isFavourite: data.isFavourite ?? e.isFavourite,
                 updatedAt: now,
               }
             : e,
@@ -459,9 +524,12 @@ export function useMangaSync(): UseMangaSyncReturn {
           BigInt(data.currentChapter),
           data.totalChapters != null ? BigInt(data.totalChapters) : null,
           data.rating != null ? BigInt(data.rating) : null,
-          data.coverImageUrl ?? null,
+          data.coverImageUrl?.startsWith("data:")
+            ? null
+            : (data.coverImageUrl ?? null),
           data.notes,
           data.genres,
+          data.isFavourite ?? false,
         );
         setEntries((prev) => {
           const next = prev.map((e) => (e.id === id ? updated : e));
@@ -519,6 +587,209 @@ export function useMangaSync(): UseMangaSyncReturn {
     [isOnline],
   );
 
+  const toggleFavourite = useCallback(
+    async (actor: ActorLike | null, id: string) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) =>
+          e.id === id ? { ...e, isFavourite: !e.isFavourite } : e,
+        );
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "toggleFavourite",
+          payload: { id },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.toggleFavourite(id);
+        setEntries((prev) => {
+          const next = prev.map((e) => (e.id === id ? updated : e));
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
+  const updateStatus = useCallback(
+    async (actor: ActorLike | null, id: string, status: BackendMangaStatus) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) => (e.id === id ? { ...e, status } : e));
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "updateStatus",
+          payload: { id, status },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.updateStatus(id, status);
+        setEntries((prev) => {
+          const next = prev.map((e) => (e.id === id ? updated : e));
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
+  const updateChapters = useCallback(
+    async (
+      actor: ActorLike | null,
+      id: string,
+      currentChapter: number,
+      totalChapters: number | undefined,
+    ) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                currentChapter: BigInt(currentChapter),
+                totalChapters:
+                  totalChapters != null ? BigInt(totalChapters) : undefined,
+              }
+            : e,
+        );
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "updateChapters",
+          payload: { id, currentChapter, totalChapters },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.updateChapters(
+          id,
+          BigInt(currentChapter),
+          totalChapters != null ? BigInt(totalChapters) : null,
+        );
+        setEntries((prev) => {
+          const next = prev.map((e) => (e.id === id ? updated : e));
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
+  const updateRating = useCallback(
+    async (actor: ActorLike | null, id: string, rating: number | undefined) => {
+      let previous: MangaEntry | undefined;
+
+      setEntries((prev) => {
+        previous = prev.find((e) => e.id === id);
+        const next = prev.map((e) =>
+          e.id === id
+            ? { ...e, rating: rating != null ? BigInt(rating) : undefined }
+            : e,
+        );
+        saveCache(next);
+        return next;
+      });
+
+      if (!isOnline || !actor) {
+        const queue = loadQueue();
+        queue.push({
+          type: "updateRating",
+          payload: { id, rating },
+          timestamp: Date.now(),
+        });
+        saveQueue(queue);
+        setPendingCount(queue.length);
+        return;
+      }
+
+      try {
+        const updated = await actor.updateRating(
+          id,
+          rating != null ? BigInt(rating) : null,
+        );
+        setEntries((prev) => {
+          const next = prev.map((e) => (e.id === id ? updated : e));
+          saveCache(next);
+          return next;
+        });
+      } catch {
+        if (previous) {
+          const prev_entry = previous;
+          setEntries((prev) => {
+            const next = prev.map((e) => (e.id === id ? prev_entry : e));
+            saveCache(next);
+            return next;
+          });
+        }
+      }
+    },
+    [isOnline],
+  );
+
   return {
     entries,
     isLoading,
@@ -527,6 +798,10 @@ export function useMangaSync(): UseMangaSyncReturn {
     addEntry,
     updateEntry,
     deleteEntry,
+    toggleFavourite,
+    updateStatus,
+    updateChapters,
+    updateRating,
     pendingCount,
   };
 }

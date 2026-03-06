@@ -103,6 +103,7 @@ export interface MangaEntry {
     notes: string;
     rating?: bigint;
     totalChapters?: bigint;
+    isFavourite: boolean;
     currentChapter: bigint;
 }
 export interface UserProfile {
@@ -113,7 +114,8 @@ export enum MangaStatus {
     PlanToRead = "PlanToRead",
     Reading = "Reading",
     Dropped = "Dropped",
-    Completed = "Completed"
+    Completed = "Completed",
+    Incomplete = "Incomplete"
 }
 export enum UserRole {
     admin = "admin",
@@ -122,18 +124,20 @@ export enum UserRole {
 }
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    addEntry(title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>): Promise<MangaEntry>;
+    addEntry(title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>, isFavourite: boolean): Promise<MangaEntry>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    checkTrusted(user: Principal): Promise<boolean>;
     deleteEntry(id: string): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getEntries(): Promise<Array<MangaEntry>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
-    markTrusted(): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    updateEntry(id: string, title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>): Promise<MangaEntry>;
+    toggleFavourite(id: string): Promise<MangaEntry>;
+    updateChapters(id: string, currentChapter: bigint, totalChapters: bigint | null): Promise<MangaEntry>;
+    updateEntry(id: string, title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>, isFavourite: boolean): Promise<MangaEntry>;
+    updateRating(id: string, rating: bigint | null): Promise<MangaEntry>;
+    updateStatus(id: string, status: MangaStatus): Promise<MangaEntry>;
 }
 import type { MangaEntry as _MangaEntry, MangaStatus as _MangaStatus, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -152,17 +156,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async addEntry(arg0: string, arg1: string, arg2: string, arg3: string, arg4: MangaStatus, arg5: bigint, arg6: bigint | null, arg7: bigint | null, arg8: string | null, arg9: string, arg10: Array<string>): Promise<MangaEntry> {
+    async addEntry(arg0: string, arg1: string, arg2: string, arg3: string, arg4: MangaStatus, arg5: bigint, arg6: bigint | null, arg7: bigint | null, arg8: string | null, arg9: string, arg10: Array<string>, arg11: boolean): Promise<MangaEntry> {
         if (this.processError) {
             try {
-                const result = await this.actor.addEntry(arg0, arg1, arg2, arg3, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg4), arg5, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg6), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg8), arg9, arg10);
+                const result = await this.actor.addEntry(arg0, arg1, arg2, arg3, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg4), arg5, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg6), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg8), arg9, arg10, arg11);
                 return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.addEntry(arg0, arg1, arg2, arg3, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg4), arg5, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg6), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg8), arg9, arg10);
+            const result = await this.actor.addEntry(arg0, arg1, arg2, arg3, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg4), arg5, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg6), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg8), arg9, arg10, arg11);
             return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -177,20 +181,6 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n11(this._uploadFile, this._downloadFile, arg1));
-            return result;
-        }
-    }
-    async checkTrusted(arg0: Principal): Promise<boolean> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.checkTrusted(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.checkTrusted(arg0);
             return result;
         }
     }
@@ -278,20 +268,6 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async markTrusted(): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.markTrusted();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.markTrusted();
-            return result;
-        }
-    }
     async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
         if (this.processError) {
             try {
@@ -306,17 +282,73 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateEntry(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: MangaStatus, arg6: bigint, arg7: bigint | null, arg8: bigint | null, arg9: string | null, arg10: string, arg11: Array<string>): Promise<MangaEntry> {
+    async toggleFavourite(arg0: string): Promise<MangaEntry> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateEntry(arg0, arg1, arg2, arg3, arg4, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg5), arg6, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg8), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg9), arg10, arg11);
+                const result = await this.actor.toggleFavourite(arg0);
                 return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateEntry(arg0, arg1, arg2, arg3, arg4, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg5), arg6, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg8), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg9), arg10, arg11);
+            const result = await this.actor.toggleFavourite(arg0);
+            return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async updateChapters(arg0: string, arg1: bigint, arg2: bigint | null): Promise<MangaEntry> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateChapters(arg0, arg1, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg2));
+                return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateChapters(arg0, arg1, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg2));
+            return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async updateEntry(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: MangaStatus, arg6: bigint, arg7: bigint | null, arg8: bigint | null, arg9: string | null, arg10: string, arg11: Array<string>, arg12: boolean): Promise<MangaEntry> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateEntry(arg0, arg1, arg2, arg3, arg4, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg5), arg6, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg8), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg9), arg10, arg11, arg12);
+                return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateEntry(arg0, arg1, arg2, arg3, arg4, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg5), arg6, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg7), to_candid_opt_n3(this._uploadFile, this._downloadFile, arg8), to_candid_opt_n4(this._uploadFile, this._downloadFile, arg9), arg10, arg11, arg12);
+            return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async updateRating(arg0: string, arg1: bigint | null): Promise<MangaEntry> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateRating(arg0, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg1));
+                return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateRating(arg0, to_candid_opt_n3(this._uploadFile, this._downloadFile, arg1));
+            return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async updateStatus(arg0: string, arg1: MangaStatus): Promise<MangaEntry> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateStatus(arg0, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg1));
+                return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateStatus(arg0, to_candid_MangaStatus_n1(this._uploadFile, this._downloadFile, arg1));
             return from_candid_MangaEntry_n5(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -353,6 +385,7 @@ function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint
     notes: string;
     rating: [] | [bigint];
     totalChapters: [] | [bigint];
+    isFavourite: boolean;
     currentChapter: bigint;
 }): {
     id: string;
@@ -368,6 +401,7 @@ function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint
     notes: string;
     rating?: bigint;
     totalChapters?: bigint;
+    isFavourite: boolean;
     currentChapter: bigint;
 } {
     return {
@@ -384,6 +418,7 @@ function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint
         notes: value.notes,
         rating: record_opt_to_undefined(from_candid_opt_n10(_uploadFile, _downloadFile, value.rating)),
         totalChapters: record_opt_to_undefined(from_candid_opt_n10(_uploadFile, _downloadFile, value.totalChapters)),
+        isFavourite: value.isFavourite,
         currentChapter: value.currentChapter
     };
 }
@@ -406,8 +441,10 @@ function from_candid_variant_n8(_uploadFile: (file: ExternalBlob) => Promise<Uin
     Dropped: null;
 } | {
     Completed: null;
+} | {
+    Incomplete: null;
 }): MangaStatus {
-    return "OnHold" in value ? MangaStatus.OnHold : "PlanToRead" in value ? MangaStatus.PlanToRead : "Reading" in value ? MangaStatus.Reading : "Dropped" in value ? MangaStatus.Dropped : "Completed" in value ? MangaStatus.Completed : value;
+    return "OnHold" in value ? MangaStatus.OnHold : "PlanToRead" in value ? MangaStatus.PlanToRead : "Reading" in value ? MangaStatus.Reading : "Dropped" in value ? MangaStatus.Dropped : "Completed" in value ? MangaStatus.Completed : "Incomplete" in value ? MangaStatus.Incomplete : value;
 }
 function from_candid_vec_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_MangaEntry>): Array<MangaEntry> {
     return value.map((x)=>from_candid_MangaEntry_n5(_uploadFile, _downloadFile, x));
@@ -449,6 +486,8 @@ function to_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     Dropped: null;
 } | {
     Completed: null;
+} | {
+    Incomplete: null;
 } {
     return value == MangaStatus.OnHold ? {
         OnHold: null
@@ -460,6 +499,8 @@ function to_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         Dropped: null
     } : value == MangaStatus.Completed ? {
         Completed: null
+    } : value == MangaStatus.Incomplete ? {
+        Incomplete: null
     } : value;
 }
 export interface CreateActorOptions {

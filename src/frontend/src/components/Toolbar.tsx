@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Heart, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { MangaStatus, STATUS_LABELS, type SortOption } from "../types/manga";
 
 const GOLD = "oklch(0.82 0.17 85)";
@@ -27,6 +27,8 @@ const selectContentStyle: React.CSSProperties = {
   color: GOLD,
 };
 
+const PINK = "oklch(0.75 0.22 0)";
+
 interface ToolbarProps {
   search: string;
   onSearchChange: (v: string) => void;
@@ -38,6 +40,8 @@ interface ToolbarProps {
   onSortChange: (v: SortOption) => void;
   onAddClick: () => void;
   allGenres: string[];
+  showFavouritesOnly: boolean;
+  onToggleFavouritesFilter: () => void;
 }
 
 export function Toolbar({
@@ -51,6 +55,8 @@ export function Toolbar({
   onSortChange,
   onAddClick,
   allGenres,
+  showFavouritesOnly,
+  onToggleFavouritesFilter,
 }: ToolbarProps) {
   return (
     <div className="flex flex-col gap-2 px-4 md:px-6">
@@ -71,6 +77,37 @@ export function Toolbar({
             aria-label="Search manga"
           />
         </div>
+        {/* Favourites filter button */}
+        <button
+          type="button"
+          data-ocid="manga.favourites_filter.toggle"
+          onClick={onToggleFavouritesFilter}
+          aria-label={
+            showFavouritesOnly ? "Show all manga" : "Show favourites only"
+          }
+          title={showFavouritesOnly ? "Show all manga" : "Show favourites only"}
+          className="h-9 w-9 shrink-0 flex items-center justify-center rounded transition-all duration-200"
+          style={{
+            background: showFavouritesOnly
+              ? "oklch(0.75 0.22 0 / 0.12)"
+              : "transparent",
+            border: showFavouritesOnly
+              ? `1.5px solid ${PINK}`
+              : "1.5px solid oklch(0.82 0.17 85 / 0.5)",
+            color: showFavouritesOnly ? PINK : GOLD_DIM,
+          }}
+        >
+          <Heart
+            size={15}
+            strokeWidth={showFavouritesOnly ? 0 : 1.5}
+            style={{
+              fill: showFavouritesOnly ? PINK : "transparent",
+              color: showFavouritesOnly ? PINK : GOLD_DIM,
+              transition: "fill 0.2s, color 0.2s",
+            }}
+          />
+        </button>
+
         <Button
           data-ocid="manga.add_button"
           onClick={onAddClick}

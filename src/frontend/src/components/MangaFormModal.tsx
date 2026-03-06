@@ -21,6 +21,7 @@ interface MangaFormModalProps {
   entry?: MangaEntry | null;
   onClose: () => void;
   onSubmit: (data: MangaFormData) => Promise<void>;
+  allGenres: string[];
 }
 
 const GOLD = "oklch(0.82 0.17 85)";
@@ -38,6 +39,7 @@ export function MangaFormModal({
   entry,
   onClose,
   onSubmit,
+  allGenres,
 }: MangaFormModalProps) {
   const isEdit = !!entry;
 
@@ -528,6 +530,58 @@ export function MangaFormModal({
                   <Label style={{ color: GOLD_DIM, fontSize: "0.8125rem" }}>
                     Genres (press Enter to add)
                   </Label>
+
+                  {/* Suggested genres chips */}
+                  {allGenres.filter((g) => !genres.includes(g)).length > 0 && (
+                    <div className="space-y-1">
+                      <p
+                        style={{
+                          color: "oklch(0.82 0.17 85 / 0.45)",
+                          fontSize: "0.7rem",
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Existing genres — click to add
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {allGenres
+                          .filter((g) => !genres.includes(g))
+                          .map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              data-ocid={`manga.form.genre_suggestion.${g.toLowerCase().replace(/\s+/g, "_")}`}
+                              onClick={() => setGenres((prev) => [...prev, g])}
+                              className="text-xs px-2 py-0.5 rounded transition-all duration-150"
+                              style={{
+                                border: "1px solid oklch(0.82 0.17 85 / 0.35)",
+                                color: "oklch(0.62 0.12 85)",
+                                background: "transparent",
+                                cursor: "pointer",
+                              }}
+                              onMouseEnter={(e) => {
+                                const el = e.currentTarget;
+                                el.style.borderColor = GOLD;
+                                el.style.color = GOLD;
+                                el.style.background =
+                                  "oklch(0.82 0.17 85 / 0.08)";
+                              }}
+                              onMouseLeave={(e) => {
+                                const el = e.currentTarget;
+                                el.style.borderColor =
+                                  "oklch(0.82 0.17 85 / 0.35)";
+                                el.style.color = "oklch(0.62 0.12 85)";
+                                el.style.background = "transparent";
+                              }}
+                            >
+                              + {g}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div
                     className="flex flex-wrap gap-1.5 p-2 rounded-md min-h-[2.5rem]"
                     style={{ border: `1px solid ${GOLD}`, background: "#000" }}

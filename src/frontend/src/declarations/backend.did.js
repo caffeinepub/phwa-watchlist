@@ -14,6 +14,7 @@ export const MangaStatus = IDL.Variant({
   'Reading' : IDL.Null,
   'Dropped' : IDL.Null,
   'Completed' : IDL.Null,
+  'Incomplete' : IDL.Null,
 });
 export const MangaEntry = IDL.Record({
   'id' : IDL.Text,
@@ -29,6 +30,7 @@ export const MangaEntry = IDL.Record({
   'notes' : IDL.Text,
   'rating' : IDL.Opt(IDL.Nat),
   'totalChapters' : IDL.Opt(IDL.Nat),
+  'isFavourite' : IDL.Bool,
   'currentChapter' : IDL.Nat,
 });
 export const UserRole = IDL.Variant({
@@ -53,12 +55,12 @@ export const idlService = IDL.Service({
         IDL.Opt(IDL.Text),
         IDL.Text,
         IDL.Vec(IDL.Text),
+        IDL.Bool,
       ],
       [MangaEntry],
       [],
     ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-  'checkTrusted' : IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
   'deleteEntry' : IDL.Func([IDL.Text], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -69,8 +71,13 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'markTrusted' : IDL.Func([], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'toggleFavourite' : IDL.Func([IDL.Text], [MangaEntry], []),
+  'updateChapters' : IDL.Func(
+      [IDL.Text, IDL.Nat, IDL.Opt(IDL.Nat)],
+      [MangaEntry],
+      [],
+    ),
   'updateEntry' : IDL.Func(
       [
         IDL.Text,
@@ -85,10 +92,13 @@ export const idlService = IDL.Service({
         IDL.Opt(IDL.Text),
         IDL.Text,
         IDL.Vec(IDL.Text),
+        IDL.Bool,
       ],
       [MangaEntry],
       [],
     ),
+  'updateRating' : IDL.Func([IDL.Text, IDL.Opt(IDL.Nat)], [MangaEntry], []),
+  'updateStatus' : IDL.Func([IDL.Text, MangaStatus], [MangaEntry], []),
 });
 
 export const idlInitArgs = [];
@@ -100,6 +110,7 @@ export const idlFactory = ({ IDL }) => {
     'Reading' : IDL.Null,
     'Dropped' : IDL.Null,
     'Completed' : IDL.Null,
+    'Incomplete' : IDL.Null,
   });
   const MangaEntry = IDL.Record({
     'id' : IDL.Text,
@@ -115,6 +126,7 @@ export const idlFactory = ({ IDL }) => {
     'notes' : IDL.Text,
     'rating' : IDL.Opt(IDL.Nat),
     'totalChapters' : IDL.Opt(IDL.Nat),
+    'isFavourite' : IDL.Bool,
     'currentChapter' : IDL.Nat,
   });
   const UserRole = IDL.Variant({
@@ -139,12 +151,12 @@ export const idlFactory = ({ IDL }) => {
           IDL.Opt(IDL.Text),
           IDL.Text,
           IDL.Vec(IDL.Text),
+          IDL.Bool,
         ],
         [MangaEntry],
         [],
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-    'checkTrusted' : IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
     'deleteEntry' : IDL.Func([IDL.Text], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -155,8 +167,13 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'markTrusted' : IDL.Func([], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'toggleFavourite' : IDL.Func([IDL.Text], [MangaEntry], []),
+    'updateChapters' : IDL.Func(
+        [IDL.Text, IDL.Nat, IDL.Opt(IDL.Nat)],
+        [MangaEntry],
+        [],
+      ),
     'updateEntry' : IDL.Func(
         [
           IDL.Text,
@@ -171,10 +188,13 @@ export const idlFactory = ({ IDL }) => {
           IDL.Opt(IDL.Text),
           IDL.Text,
           IDL.Vec(IDL.Text),
+          IDL.Bool,
         ],
         [MangaEntry],
         [],
       ),
+    'updateRating' : IDL.Func([IDL.Text, IDL.Opt(IDL.Nat)], [MangaEntry], []),
+    'updateStatus' : IDL.Func([IDL.Text, MangaStatus], [MangaEntry], []),
   });
 };
 

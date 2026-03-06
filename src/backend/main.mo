@@ -10,9 +10,9 @@ import Migration "migration";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
-// Specify the migration in the with-clause
 (with migration = Migration.run)
 actor {
+  // Initialize the access control system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
@@ -20,15 +20,16 @@ actor {
     name : Text;
   };
 
-  type MangaStatus = {
+  public type MangaStatus = {
     #Reading;
     #Completed;
     #OnHold;
     #Dropped;
     #PlanToRead;
+    #Incomplete;
   };
 
-  type MangaEntry = {
+  public type MangaEntry = {
     id : Text;
     title : Text;
     synopsis : Text;
@@ -43,23 +44,24 @@ actor {
     genres : [Text];
     createdAt : Int;
     updatedAt : Int;
+    isFavourite : Bool;
   };
 
   let userProfiles = Map.empty<Principal, UserProfile>();
   let userMangas = Map.empty<Principal, List.List<MangaEntry>>();
-  
-  // New stable map for trusted principals
-  let trustedPrincipals = Map.empty<Principal, Bool>();
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access user profiles");
+      Runtime.trap("Unauthorized: Only users can access profiles");
     };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can access profiles");
+    };
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
@@ -68,7 +70,7 @@ actor {
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save their profiles");
+      Runtime.trap("Unauthorized: Only users can save profiles");
     };
     userProfiles.add(caller, profile);
   };
@@ -76,7 +78,7 @@ actor {
   // Manga Management Functions
   public query ({ caller }) func getEntries() : async [MangaEntry] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access entries");
+      Runtime.trap("Unauthorized: Only users can access manga entries");
     };
     switch (userMangas.get(caller)) {
       case (null) { [] };
@@ -96,13 +98,15 @@ actor {
     coverImageUrl : ?Text,
     notes : Text,
     genres : [Text],
+    isFavourite : Bool,
   ) : async MangaEntry {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add entries");
+      Runtime.trap("Unauthorized: Only users can add manga entries");
     };
+
     let now = Time.now();
 
-    let entry = {
+    let entry : MangaEntry = {
       id = Time.now().toText();
       title;
       synopsis;
@@ -117,6 +121,7 @@ actor {
       genres;
       createdAt = now;
       updatedAt = now;
+      isFavourite;
     };
 
     let currentEntries = switch (userMangas.get(caller)) {
@@ -145,9 +150,10 @@ actor {
     coverImageUrl : ?Text,
     notes : Text,
     genres : [Text],
+    isFavourite : Bool,
   ) : async MangaEntry {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update entries");
+      Runtime.trap("Unauthorized: Only users can update manga entries");
     };
 
     switch (userMangas.get(caller)) {
@@ -173,6 +179,7 @@ actor {
               genres;
               createdAt = e.createdAt;
               updatedAt = Time.now();
+              isFavourite;
             };
           }
         );
@@ -192,8 +199,9 @@ actor {
 
   public shared ({ caller }) func deleteEntry(id : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete entries");
+      Runtime.trap("Unauthorized: Only users can delete manga entries");
     };
+
     switch (userMangas.get(caller)) {
       case (null) { Runtime.trap("Entry not found") };
       case (?entries) {
@@ -213,20 +221,120 @@ actor {
       };
     };
   };
-  
-  // Trusted Principal Functions
-  public query ({ caller }) func checkTrusted(user: Principal) : async Bool {
-    switch (trustedPrincipals.get(user)) {
-      case (?trusted) { trusted };
-      case (null) { false };
+
+  public shared ({ caller }) func toggleFavourite(id : Text) : async MangaEntry {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can toggle favourite status");
+    };
+
+    switch (userMangas.get(caller)) {
+      case (null) { Runtime.trap("Entry not found") };
+      case (?entries) {
+        var found = false;
+        let updatedEntries = entries.map<MangaEntry, MangaEntry>(
+          func(e) {
+            if (e.id != id) { return e };
+            found := true;
+            { e with isFavourite = not e.isFavourite; updatedAt = Time.now() };
+          }
+        );
+
+        if (not found) { Runtime.trap("Entry not found") };
+
+        entries.clear();
+        entries.addAll(updatedEntries.values());
+
+        switch (updatedEntries.last()) {
+          case (?entry) { entry };
+          case (null) { Runtime.trap("Should not be possible") };
+        };
+      };
     };
   };
 
-  public shared ({ caller }) func markTrusted() : async () {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Anonymous principals cannot be marked as trusted");
+  public shared ({ caller }) func updateStatus(id : Text, status : MangaStatus) : async MangaEntry {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update manga status");
     };
-    trustedPrincipals.add(caller, true);
+
+    switch (userMangas.get(caller)) {
+      case (null) { Runtime.trap("Entry not found") };
+      case (?entries) {
+        var found = false;
+        let updatedEntries = entries.map<MangaEntry, MangaEntry>(
+          func(e) {
+            if (e.id != id) { return e };
+            found := true;
+            { e with status; updatedAt = Time.now() };
+          }
+        );
+
+        if (not found) { Runtime.trap("Entry not found") };
+        entries.clear();
+        entries.addAll(updatedEntries.values());
+
+        switch (updatedEntries.last()) {
+          case (?entry) { entry };
+          case (null) { Runtime.trap("Should not be possible") };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func updateChapters(id : Text, currentChapter : Nat, totalChapters : ?Nat) : async MangaEntry {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update manga chapters");
+    };
+
+    switch (userMangas.get(caller)) {
+      case (null) { Runtime.trap("Entry not found") };
+      case (?entries) {
+        var found = false;
+        let updatedEntries = entries.map<MangaEntry, MangaEntry>(
+          func(e) {
+            if (e.id != id) { return e };
+            found := true;
+            { e with currentChapter; totalChapters; updatedAt = Time.now() };
+          }
+        );
+
+        if (not found) { Runtime.trap("Entry not found") };
+        entries.clear();
+        entries.addAll(updatedEntries.values());
+
+        switch (updatedEntries.last()) {
+          case (?entry) { entry };
+          case (null) { Runtime.trap("Should not be possible") };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func updateRating(id : Text, rating : ?Nat) : async MangaEntry {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update manga rating");
+    };
+
+    switch (userMangas.get(caller)) {
+      case (null) { Runtime.trap("Entry not found") };
+      case (?entries) {
+        var found = false;
+        let updatedEntries = entries.map<MangaEntry, MangaEntry>(
+          func(e) {
+            if (e.id != id) { return e };
+            found := true;
+            { e with rating; updatedAt = Time.now() };
+          }
+        );
+        if (not found) { Runtime.trap("Entry not found") };
+        entries.clear();
+        entries.addAll(updatedEntries.values());
+
+        switch (updatedEntries.last()) {
+          case (?entry) { entry };
+          case (null) { Runtime.trap("Should not be possible") };
+        };
+      };
+    };
   };
 };
-

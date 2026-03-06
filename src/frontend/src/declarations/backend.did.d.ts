@@ -24,13 +24,15 @@ export interface MangaEntry {
   'notes' : string,
   'rating' : [] | [bigint],
   'totalChapters' : [] | [bigint],
+  'isFavourite' : boolean,
   'currentChapter' : bigint,
 }
 export type MangaStatus = { 'OnHold' : null } |
   { 'PlanToRead' : null } |
   { 'Reading' : null } |
   { 'Dropped' : null } |
-  { 'Completed' : null };
+  { 'Completed' : null } |
+  { 'Incomplete' : null };
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -50,19 +52,20 @@ export interface _SERVICE {
       [] | [string],
       string,
       Array<string>,
+      boolean,
     ],
     MangaEntry
   >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
-  'checkTrusted' : ActorMethod<[Principal], boolean>,
   'deleteEntry' : ActorMethod<[string], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getEntries' : ActorMethod<[], Array<MangaEntry>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'markTrusted' : ActorMethod<[], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'toggleFavourite' : ActorMethod<[string], MangaEntry>,
+  'updateChapters' : ActorMethod<[string, bigint, [] | [bigint]], MangaEntry>,
   'updateEntry' : ActorMethod<
     [
       string,
@@ -77,9 +80,12 @@ export interface _SERVICE {
       [] | [string],
       string,
       Array<string>,
+      boolean,
     ],
     MangaEntry
   >,
+  'updateRating' : ActorMethod<[string, [] | [bigint]], MangaEntry>,
+  'updateStatus' : ActorMethod<[string, MangaStatus], MangaEntry>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

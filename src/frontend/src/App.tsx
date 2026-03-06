@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useActor } from "./hooks/useActor";
+import { useActor } from "./hooks/useActorFixed";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useMangaSync } from "./hooks/useMangaSync";
 
@@ -13,10 +13,10 @@ import { Header } from "./components/Header";
 import { LoginPage } from "./components/LoginPage";
 import { MangaCard } from "./components/MangaCard";
 import { MangaFormModal } from "./components/MangaFormModal";
-import { PasswordGate } from "./components/PasswordGate";
 import { StatsBar } from "./components/StatsBar";
 import { Toolbar } from "./components/Toolbar";
 
+import type { MangaStatus as BackendMangaStatus } from "./backend.d";
 import type { MangaEntry } from "./hooks/useMangaSync";
 import type { MangaFormData, SortOption } from "./types/manga";
 import type { MangaStatus } from "./types/manga";
@@ -38,23 +38,6 @@ export default function App() {
   const { actor, isFetching: isActorFetching } = useActor();
   const isAuthenticated = !!identity;
 
-  // ── Password gate ───────────────────────────────────────────────────────────
-  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
-
-  useEffect(() => {
-    if (!actor || !identity || isActorFetching) return;
-    void (async () => {
-      try {
-        const trusted = await (
-          actor as unknown as { checkTrusted: (p: unknown) => Promise<boolean> }
-        ).checkTrusted(identity.getPrincipal());
-        if (trusted) setIsPasswordVerified(true);
-      } catch {
-        // If the call fails, leave isPasswordVerified as false — gate will show
-      }
-    })();
-  }, [actor, identity, isActorFetching]);
-
   const {
     entries,
     isLoading,
@@ -63,6 +46,10 @@ export default function App() {
     addEntry,
     updateEntry,
     deleteEntry,
+    toggleFavourite,
+    updateStatus,
+    updateChapters,
+    updateRating,
     pendingCount,
   } = useMangaSync();
 
@@ -71,6 +58,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<MangaStatus | "all">("all");
   const [genreFilter, setGenreFilter] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
 
   // Modal state
   const [formOpen, setFormOpen] = useState(false);
@@ -100,6 +88,10 @@ export default function App() {
   // ── Filtered + sorted entries ──────────────────────────────────────────────
   const filteredEntries = useMemo(() => {
     let result = entries;
+
+    if (showFavouritesOnly) {
+      result = result.filter((e) => e.isFavourite === true);
+    }
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -153,7 +145,14 @@ export default function App() {
     });
 
     return result;
-  }, [entries, search, statusFilter, genreFilter, sortOption]);
+  }, [
+    entries,
+    search,
+    statusFilter,
+    genreFilter,
+    sortOption,
+    showFavouritesOnly,
+  ]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleAddClick = useCallback(() => {
@@ -177,14 +176,14 @@ export default function App() {
           await updateEntry(
             actor as unknown as Parameters<typeof updateEntry>[0],
             editingEntry.id,
-            data,
+            { ...data, isFavourite: editingEntry.isFavourite },
           );
           toast.success("Entry updated");
         } else {
-          await addEntry(
-            actor as unknown as Parameters<typeof addEntry>[0],
-            data,
-          );
+          await addEntry(actor as unknown as Parameters<typeof addEntry>[0], {
+            ...data,
+            isFavourite: false,
+          });
           toast.success(`"${data.title}" added to watchlist`);
         }
       } catch {
@@ -213,9 +212,52 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     clear();
-    setIsPasswordVerified(false);
     toast("Signed out");
   }, [clear]);
+
+  const handleToggleFavourite = useCallback(
+    (entry: MangaEntry) => {
+      void toggleFavourite(
+        actor as unknown as Parameters<typeof toggleFavourite>[0],
+        entry.id,
+      );
+    },
+    [toggleFavourite, actor],
+  );
+
+  const handleQuickStatusChange = useCallback(
+    (entry: MangaEntry, status: MangaStatus) => {
+      void updateStatus(
+        actor as unknown as Parameters<typeof updateStatus>[0],
+        entry.id,
+        status as unknown as BackendMangaStatus,
+      );
+    },
+    [updateStatus, actor],
+  );
+
+  const handleQuickChapterChange = useCallback(
+    (entry: MangaEntry, current: number, total: number | undefined) => {
+      void updateChapters(
+        actor as unknown as Parameters<typeof updateChapters>[0],
+        entry.id,
+        current,
+        total,
+      );
+    },
+    [updateChapters, actor],
+  );
+
+  const handleQuickRatingChange = useCallback(
+    (entry: MangaEntry, rating: number | undefined) => {
+      void updateRating(
+        actor as unknown as Parameters<typeof updateRating>[0],
+        entry.id,
+        rating,
+      );
+    },
+    [updateRating, actor],
+  );
 
   // ── Loading screen ─────────────────────────────────────────────────────────
   if (isInitializing) {
@@ -238,16 +280,6 @@ export default function App() {
   // ── Login screen ───────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return <LoginPage />;
-  }
-
-  // ── Password gate ───────────────────────────────────────────────────────────
-  if (isAuthenticated && !isPasswordVerified) {
-    return (
-      <PasswordGate
-        actor={actor as unknown}
-        onSuccess={() => setIsPasswordVerified(true)}
-      />
-    );
   }
 
   // ── Main app ───────────────────────────────────────────────────────────────
@@ -292,41 +324,89 @@ export default function App() {
           onSortChange={setSortOption}
           onAddClick={handleAddClick}
           allGenres={allGenres}
+          showFavouritesOnly={showFavouritesOnly}
+          onToggleFavouritesFilter={() => setShowFavouritesOnly((v) => !v)}
         />
 
         {/* List */}
         <section className="px-4 md:px-6" aria-label="Manga list">
           {/* Loading skeleton */}
           {isLoading && entries.length === 0 && (
-            <div
-              data-ocid="manga.list"
-              className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-            >
-              {Array.from({ length: 8 }, (_, i) => `skeleton-${i}`).map(
+            <div data-ocid="manga.list" className="flex flex-col gap-3">
+              {Array.from({ length: 5 }, (_, i) => `skeleton-${i}`).map(
                 (key) => (
                   <div
                     key={key}
-                    className="rounded-lg overflow-hidden"
-                    style={{ border: "1px solid oklch(0.82 0.17 85 / 0.2)" }}
+                    className="rounded-lg overflow-hidden flex flex-row"
+                    style={{
+                      width: 1300,
+                      maxWidth: "100%",
+                      height: 150,
+                      border: "1px solid oklch(0.82 0.17 85 / 0.2)",
+                    }}
                   >
+                    {/* Cover skeleton */}
                     <div
-                      className="w-full"
                       style={{
-                        aspectRatio: "3/4",
+                        width: 115,
+                        height: 150,
+                        flexShrink: 0,
                         background:
                           "linear-gradient(90deg, oklch(0.05 0 0) 25%, oklch(0.08 0 0) 50%, oklch(0.05 0 0) 75%)",
                         backgroundSize: "200% 100%",
                         animation: "shimmer 1.5s linear infinite",
                       }}
                     />
-                    <div className="p-3 space-y-2">
+                    {/* Title skeleton */}
+                    <div
+                      style={{
+                        width: 240,
+                        height: 150,
+                        flexShrink: 0,
+                        padding: "12px 10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
+                      }}
+                    >
                       <div
                         className="h-3 rounded"
-                        style={{ background: "oklch(0.1 0 0)", width: "80%" }}
+                        style={{ background: "oklch(0.1 0 0)", width: "90%" }}
+                      />
+                      <div
+                        className="h-3 rounded"
+                        style={{ background: "oklch(0.08 0 0)", width: "70%" }}
+                      />
+                      <div
+                        className="h-3 rounded"
+                        style={{ background: "oklch(0.07 0 0)", width: "55%" }}
+                      />
+                    </div>
+                    {/* Info skeleton */}
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 150,
+                        padding: "12px 14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        justifyContent: "center",
+                        borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
+                      }}
+                    >
+                      <div
+                        className="h-4 rounded"
+                        style={{ background: "oklch(0.1 0 0)", width: 80 }}
                       />
                       <div
                         className="h-2 rounded"
-                        style={{ background: "oklch(0.08 0 0)", width: "50%" }}
+                        style={{ background: "oklch(0.08 0 0)", width: 120 }}
+                      />
+                      <div
+                        className="h-2 rounded"
+                        style={{ background: "oklch(0.07 0 0)", width: 90 }}
                       />
                     </div>
                   </div>
@@ -353,49 +433,53 @@ export default function App() {
               </div>
               <div className="text-center space-y-1">
                 <p className="font-semibold" style={{ color: GOLD_DIM }}>
-                  {search || statusFilter !== "all" || genreFilter
-                    ? "No results found"
-                    : "Your watchlist is empty"}
+                  {showFavouritesOnly
+                    ? "No favourites yet"
+                    : search || statusFilter !== "all" || genreFilter
+                      ? "No results found"
+                      : "Your watchlist is empty"}
                 </p>
                 <p className="text-sm" style={{ color: "oklch(0.40 0.08 85)" }}>
-                  {search || statusFilter !== "all" || genreFilter
-                    ? "Try adjusting your filters"
-                    : "Add your first manga to get started"}
+                  {showFavouritesOnly
+                    ? "Click the heart icon on any title to favourite it"
+                    : search || statusFilter !== "all" || genreFilter
+                      ? "Try adjusting your filters"
+                      : "Add your first manga to get started"}
                 </p>
               </div>
-              {!search && statusFilter === "all" && !genreFilter && (
-                <button
-                  type="button"
-                  onClick={handleAddClick}
-                  className="text-sm font-medium px-4 py-2 rounded transition-all duration-200"
-                  style={{
-                    border: `1px solid ${GOLD}`,
-                    color: GOLD,
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = GOLD;
-                    el.style.color = "#000";
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = "transparent";
-                    el.style.color = GOLD;
-                  }}
-                >
-                  Add your first manga
-                </button>
-              )}
+              {!showFavouritesOnly &&
+                !search &&
+                statusFilter === "all" &&
+                !genreFilter && (
+                  <button
+                    type="button"
+                    onClick={handleAddClick}
+                    className="text-sm font-medium px-4 py-2 rounded transition-all duration-200"
+                    style={{
+                      border: `1px solid ${GOLD}`,
+                      color: GOLD,
+                      background: "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = GOLD;
+                      el.style.color = "#000";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = "transparent";
+                      el.style.color = GOLD;
+                    }}
+                  >
+                    Add your first manga
+                  </button>
+                )}
             </div>
           )}
 
-          {/* Grid */}
+          {/* List */}
           {filteredEntries.length > 0 && (
-            <div
-              data-ocid="manga.list"
-              className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-            >
+            <div data-ocid="manga.list" className="flex flex-col gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredEntries.map((entry, index) => (
                   <MangaCard
@@ -404,6 +488,10 @@ export default function App() {
                     index={index}
                     onEdit={handleEditClick}
                     onDelete={handleDeleteClick}
+                    onToggleFavourite={handleToggleFavourite}
+                    onQuickStatusChange={handleQuickStatusChange}
+                    onQuickChapterChange={handleQuickChapterChange}
+                    onQuickRatingChange={handleQuickRatingChange}
                   />
                 ))}
               </AnimatePresence>
@@ -452,6 +540,7 @@ export default function App() {
           setEditingEntry(null);
         }}
         onSubmit={handleFormSubmit}
+        allGenres={allGenres}
       />
 
       <DeleteConfirmDialog

@@ -164,6 +164,7 @@
   .status-onhold     { color: oklch(0.75 0.18 55); border-color: oklch(0.75 0.18 55); }
   .status-dropped    { color: oklch(0.7 0.22 25); border-color: oklch(0.7 0.22 25); }
   .status-plantoread { color: oklch(0.7 0.15 270); border-color: oklch(0.7 0.15 270); }
+  .status-incomplete { color: oklch(0.72 0.18 50); border-color: oklch(0.72 0.18 50); }
 
   /* Synopsis scroll area — invisible scrollbar */
   .synopsis-scroll-area {

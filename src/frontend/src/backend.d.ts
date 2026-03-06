@@ -21,6 +21,7 @@ export interface MangaEntry {
     notes: string;
     rating?: bigint;
     totalChapters?: bigint;
+    isFavourite: boolean;
     currentChapter: bigint;
 }
 export interface UserProfile {
@@ -31,7 +32,8 @@ export enum MangaStatus {
     PlanToRead = "PlanToRead",
     Reading = "Reading",
     Dropped = "Dropped",
-    Completed = "Completed"
+    Completed = "Completed",
+    Incomplete = "Incomplete"
 }
 export enum UserRole {
     admin = "admin",
@@ -39,16 +41,18 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    addEntry(title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>): Promise<MangaEntry>;
+    addEntry(title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>, isFavourite: boolean): Promise<MangaEntry>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    checkTrusted(user: Principal): Promise<boolean>;
     deleteEntry(id: string): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getEntries(): Promise<Array<MangaEntry>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
-    markTrusted(): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    updateEntry(id: string, title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>): Promise<MangaEntry>;
+    toggleFavourite(id: string): Promise<MangaEntry>;
+    updateChapters(id: string, currentChapter: bigint, totalChapters: bigint | null): Promise<MangaEntry>;
+    updateEntry(id: string, title: string, synopsis: string, altTitle1: string, altTitle2: string, status: MangaStatus, currentChapter: bigint, totalChapters: bigint | null, rating: bigint | null, coverImageUrl: string | null, notes: string, genres: Array<string>, isFavourite: boolean): Promise<MangaEntry>;
+    updateRating(id: string, rating: bigint | null): Promise<MangaEntry>;
+    updateStatus(id: string, status: MangaStatus): Promise<MangaEntry>;
 }
