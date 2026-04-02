@@ -1,13 +1,22 @@
 import { Toaster } from "@/components/ui/sonner";
-import { BookOpen, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import JSZip from "jszip";
 import { useActor } from "./hooks/useActorFixed";
 import { useCycleBalance } from "./hooks/useCycleBalance";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useMangaSync } from "./hooks/useMangaSync";
+import { loadCoverByTitleIDB, loadCoverIDB } from "./utils/coverDb";
+import { migrateCoversToIDB } from "./utils/migrateCovers";
 
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { Header } from "./components/Header";
@@ -26,6 +35,148 @@ import type { MangaStatus } from "./types/manga";
 
 const GOLD = "oklch(0.82 0.17 85)";
 const GOLD_DIM = "oklch(0.62 0.12 85)";
+const RED = "oklch(0.65 0.22 25)";
+
+// ── Delete All Confirmation Dialog ────────────────────────────────────────────
+
+interface DeleteAllConfirmDialogProps {
+  open: boolean;
+  entryCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function DeleteAllConfirmDialog({
+  open,
+  entryCount,
+  onConfirm,
+  onCancel,
+}: DeleteAllConfirmDialogProps) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50"
+            style={{ background: "rgba(0,0,0,0.92)" }}
+            onClick={onCancel}
+            aria-hidden="true"
+          />
+
+          {/* Dialog */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Confirm delete all"
+            data-ocid="delete_all.dialog"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              className="relative w-full max-w-sm bg-black rounded-lg p-6 space-y-5"
+              style={{
+                border: `1.5px solid ${RED}`,
+                boxShadow: "0 0 40px oklch(0.65 0.22 25 / 0.2)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col items-center text-center gap-3">
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{
+                    border: `1px solid ${RED}`,
+                    background: "oklch(0.65 0.22 25 / 0.1)",
+                  }}
+                >
+                  <Trash2 size={22} style={{ color: RED }} strokeWidth={1.5} />
+                </div>
+                <div>
+                  <h3
+                    className="text-base font-semibold"
+                    style={{ color: RED }}
+                  >
+                    Delete All Entries?
+                  </h3>
+                  <p
+                    className="mt-2 text-sm leading-relaxed"
+                    style={{ color: GOLD_DIM }}
+                  >
+                    This will permanently delete{" "}
+                    <span className="font-semibold" style={{ color: GOLD }}>
+                      all {entryCount} {entryCount === 1 ? "entry" : "entries"}
+                    </span>{" "}
+                    from your watchlist, including all cover images. This cannot
+                    be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  data-ocid="delete_all.cancel_button"
+                  className="flex-1 h-9 rounded text-sm font-medium transition-colors"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid oklch(0.82 0.17 85 / 0.3)",
+                    color: GOLD_DIM,
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.color = GOLD;
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "oklch(0.82 0.17 85 / 0.6)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.color = GOLD_DIM;
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "oklch(0.82 0.17 85 / 0.3)";
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onConfirm}
+                  data-ocid="delete_all.confirm_button"
+                  className="flex-1 h-9 rounded text-sm font-semibold transition-all duration-200"
+                  style={{
+                    background: "transparent",
+                    border: `1.5px solid ${RED}`,
+                    color: RED,
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = RED;
+                    el.style.color = "#000";
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = "transparent";
+                    el.style.color = RED;
+                  }}
+                >
+                  Delete All
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 // Register service worker
 if ("serviceWorker" in navigator) {
@@ -49,6 +200,7 @@ export default function App() {
     addEntry,
     updateEntry,
     deleteEntry,
+    deleteAllEntries,
     toggleFavourite,
     updateStatus,
     updateChapters,
@@ -62,8 +214,16 @@ export default function App() {
   // ── Cycle balance monitor ───────────────────────────────────────────────────
   const { cycleBalance } = useCycleBalance(isAuthenticated);
 
+  // ── Migrate cover images from localStorage → IndexedDB on first load ────────
+  useEffect(() => {
+    void migrateCoversToIDB();
+  }, []);
+
   // ── Password gate state ─────────────────────────────────────────────────────
   const [passwordCleared, setPasswordCleared] = useState(false);
+
+  // ── Delete All state ────────────────────────────────────────────────────────
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -213,6 +373,16 @@ export default function App() {
             const ra = a.rating != null ? Number(a.rating) : 11;
             const rb = b.rating != null ? Number(b.rating) : 11;
             return ra - rb;
+          }
+          case "cen-lvl-desc": {
+            const ca = a.cenLvl != null ? Number(a.cenLvl) : -1;
+            const cb = b.cenLvl != null ? Number(b.cenLvl) : -1;
+            return cb - ca;
+          }
+          case "cen-lvl-asc": {
+            const ca = a.cenLvl != null ? Number(a.cenLvl) : 11;
+            const cb = b.cenLvl != null ? Number(b.cenLvl) : 11;
+            return ca - cb;
           }
           case "chapter-progress": {
             const ap =
@@ -464,6 +634,18 @@ export default function App() {
     toast("Signed out");
   }, [clear]);
 
+  const handleDeleteAllConfirm = useCallback(async () => {
+    setDeleteAllOpen(false);
+    try {
+      await deleteAllEntries(
+        actor as unknown as Parameters<typeof deleteAllEntries>[0],
+      );
+      toast.success("All entries deleted. You can now re-import.");
+    } catch {
+      toast.error("Failed to delete all entries");
+    }
+  }, [deleteAllEntries, actor]);
+
   const handleToggleFavourite = useCallback(
     (entry: MangaEntry) => {
       void toggleFavourite(
@@ -564,47 +746,110 @@ export default function App() {
     [updateEntry, actor],
   );
 
-  const handleExport = useCallback(() => {
-    const exportEntries = entries.map((entry) => ({
-      id: entry.id,
-      mainTitle: entry.title,
-      ...(entry.altTitle1 ? { altTitle1: entry.altTitle1 } : {}),
-      ...(entry.altTitle2 ? { altTitle2: entry.altTitle2 } : {}),
-      synopsis: entry.synopsis || "",
-      genres: entry.genres,
-      rating: entry.rating != null ? String(Number(entry.rating)) : "N/A",
-      cenLVL: entry.cenLvl != null ? String(entry.cenLvl) : "0",
-      art: entry.artRating != null ? String(entry.artRating) : "0",
-      chaptersOwned: String(Number(entry.totalChapters ?? 0)),
-      chaptersRead: String(Number(entry.currentChapter)),
-      personalNotes: entry.notes || "",
-      bookmarked: entry.isFavourite,
-      imageFilename: `${entry.id}.jpg`,
-    }));
-
-    const backup = {
-      version: "2.0",
-      timestamp: new Date().toISOString(),
-      chunkIndex: 0,
-      totalChunks: 1,
-      totalEntries: exportEntries.length,
-      chunkEntries: exportEntries.length,
-      entries: exportEntries,
-    };
-
-    const blob = new Blob([JSON.stringify(backup, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
+  const handleExport = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `phwa-watchlist-export-${today}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${exportEntries.length} entries`);
+    const CHUNK_SIZE_BYTES = 30 * 1024 * 1024; // 30 MB
+
+    toast.info("Preparing export, please wait...");
+
+    // Build entry list and resolve cover images from IndexedDB
+    const exportEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const imageFilename = `${entry.id}.jpg`;
+        // Try ID key first, then title key fallback
+        let coverDataUrl = await loadCoverIDB(entry.id);
+        if (!coverDataUrl) {
+          coverDataUrl = await loadCoverByTitleIDB(entry.title);
+        }
+        return {
+          entryData: {
+            id: entry.id,
+            mainTitle: entry.title,
+            ...(entry.altTitle1 ? { altTitle1: entry.altTitle1 } : {}),
+            ...(entry.altTitle2 ? { altTitle2: entry.altTitle2 } : {}),
+            synopsis: entry.synopsis || "",
+            genres: entry.genres,
+            rating: entry.rating != null ? String(Number(entry.rating)) : "N/A",
+            cenLVL: entry.cenLvl != null ? String(entry.cenLvl) : "0",
+            art: entry.artRating != null ? String(entry.artRating) : "0",
+            chaptersOwned: String(Number(entry.totalChapters ?? 0)),
+            chaptersRead: String(Number(entry.currentChapter)),
+            personalNotes: entry.notes || "",
+            bookmarked: entry.isFavourite,
+            imageFilename,
+          },
+          imageFilename,
+          coverDataUrl: coverDataUrl ?? null,
+        };
+      }),
+    );
+
+    // Split entries into chunks by JSON size
+    const chunks: (typeof exportEntries)[] = [];
+    let currentChunk: typeof exportEntries = [];
+    let currentSize = 0;
+    for (const item of exportEntries) {
+      const itemSize = JSON.stringify(item.entryData).length;
+      if (
+        currentChunk.length > 0 &&
+        currentSize + itemSize > CHUNK_SIZE_BYTES
+      ) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+        currentSize = 0;
+      }
+      currentChunk.push(item);
+      currentSize += itemSize;
+    }
+    if (currentChunk.length > 0) chunks.push(currentChunk);
+
+    const totalChunks = chunks.length;
+
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = chunks[i];
+      const zip = new JSZip();
+      const imagesFolder = zip.folder("images");
+
+      // Add JSON
+      const backup = {
+        version: "2.0",
+        timestamp: new Date().toISOString(),
+        chunkIndex: i,
+        totalChunks,
+        totalEntries: entries.length,
+        chunkEntries: chunk.length,
+        entries: chunk.map((c) => c.entryData),
+      };
+      zip.file("backup.json", JSON.stringify(backup, null, 2));
+
+      // Add images
+      let imageCount = 0;
+      for (const item of chunk) {
+        if (item.coverDataUrl && imagesFolder) {
+          // Strip data URL prefix to get raw base64
+          const base64 = item.coverDataUrl.replace(/^data:[^;]+;base64,/, "");
+          imagesFolder.file(item.imageFilename, base64, { base64: true });
+          imageCount++;
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const suffix = totalChunks > 1 ? `-part${i + 1}of${totalChunks}` : "";
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `phwa-watchlist-export-${today}${suffix}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success(
+        totalChunks > 1
+          ? `Exported chunk ${i + 1}/${totalChunks} (${chunk.length} entries, ${imageCount} images)`
+          : `Exported ${chunk.length} entries with ${imageCount} images`,
+      );
+    }
   }, [entries]);
 
   const handleImportEntry = useCallback(
@@ -703,6 +948,7 @@ export default function App() {
           onToggleFavouritesFilter={() => setShowFavouritesOnly((v) => !v)}
           onImportClick={() => setImportOpen(true)}
           onExportClick={handleExport}
+          onDeleteAllClick={() => setDeleteAllOpen(true)}
         />
 
         {/* List — scroll wrapper handles overflow without dynamic sizing */}
@@ -1094,6 +1340,14 @@ export default function App() {
         onClose={() => setImportOpen(false)}
         existingEntries={entries}
         onImportEntry={handleImportEntry}
+      />
+
+      {/* Delete All confirmation dialog */}
+      <DeleteAllConfirmDialog
+        open={deleteAllOpen}
+        entryCount={entries.length}
+        onConfirm={handleDeleteAllConfirm}
+        onCancel={() => setDeleteAllOpen(false)}
       />
     </div>
   );

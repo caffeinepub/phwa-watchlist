@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -57,6 +58,7 @@ interface ToolbarProps {
   onToggleFavouritesFilter: () => void;
   onImportClick: () => void;
   onExportClick: () => void;
+  onDeleteAllClick: () => void;
 }
 
 // ── Genre Multi-Select Dropdown ───────────────────────────────────────────────
@@ -292,6 +294,7 @@ export function Toolbar({
   onToggleFavouritesFilter,
   onImportClick,
   onExportClick,
+  onDeleteAllClick,
 }: ToolbarProps) {
   return (
     <div className="flex flex-col gap-2 px-4 md:px-6">
@@ -453,6 +456,35 @@ export function Toolbar({
           <Download size={14} strokeWidth={2} />
           <span className="hidden sm:inline">Export</span>
         </button>
+
+        {/* Delete All button */}
+        <button
+          type="button"
+          data-ocid="toolbar.delete_all_button"
+          onClick={onDeleteAllClick}
+          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+          style={{
+            background: "transparent",
+            border: "1.5px solid oklch(0.65 0.22 25 / 0.7)",
+            color: "oklch(0.65 0.22 25)",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget;
+            el.style.background = "oklch(0.65 0.22 25 / 0.15)";
+            el.style.borderColor = "oklch(0.65 0.22 25)";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget;
+            el.style.background = "transparent";
+            el.style.borderColor = "oklch(0.65 0.22 25 / 0.7)";
+          }}
+          aria-label="Delete all entries"
+          title="Delete all entries"
+        >
+          <Trash2 size={14} strokeWidth={2} />
+          <span className="hidden sm:inline">Delete All</span>
+        </button>
       </div>
 
       {/* Row 2: Filters */}
@@ -517,6 +549,12 @@ export function Toolbar({
             </SelectItem>
             <SelectItem value="rating-asc" style={{ color: GOLD }}>
               Rating Low → High
+            </SelectItem>
+            <SelectItem value="cen-lvl-desc" style={{ color: GOLD }}>
+              Cen LVL High → Low
+            </SelectItem>
+            <SelectItem value="cen-lvl-asc" style={{ color: GOLD }}>
+              Cen LVL Low → High
             </SelectItem>
             <SelectItem value="chapter-progress" style={{ color: GOLD }}>
               Chapter Progress

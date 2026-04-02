@@ -1333,8 +1333,8 @@ export function MangaCard({
   }, [artRatingInput, entry, onQuickArtRatingChange]);
 
   const handleCenLvlSave = useCallback(() => {
-    const r = cenLvlInput ? Number(cenLvlInput) : undefined;
-    if (r !== undefined && (r < 1 || r > 10)) return;
+    const r = cenLvlInput !== "" ? Number(cenLvlInput) : undefined;
+    if (r !== undefined && (r < 0 || r > 10)) return;
     onQuickCenLvlChange(entry, r);
     setCenLvlPopupOpen(false);
   }, [cenLvlInput, entry, onQuickCenLvlChange]);
@@ -2002,6 +2002,7 @@ export function MangaCard({
                 <input
                   type="number"
                   min={0}
+                  step={0.1}
                   value={chapterCurrentInput}
                   onChange={(e) => setChapterCurrentInput(e.target.value)}
                   placeholder="Current"
@@ -2026,6 +2027,7 @@ export function MangaCard({
                 <input
                   type="number"
                   min={0}
+                  step={0.1}
                   value={chapterTotalInput}
                   onChange={(e) => setChapterTotalInput(e.target.value)}
                   placeholder="Total"
@@ -2318,11 +2320,11 @@ export function MangaCard({
                   margin: 0,
                 }}
               >
-                Cen LVL (1–10)
+                Cen LVL (0–10)
               </p>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={10}
                 step={0.1}
                 value={cenLvlInput}

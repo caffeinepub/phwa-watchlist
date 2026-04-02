@@ -9,6 +9,7 @@ import { CheckCircle2, FileJson, FolderOpen, XCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import type { MangaEntry } from "../hooks/useMangaSync";
 import { type MangaFormData, MangaStatus } from "../types/manga";
+import { saveCoverByTitleIDB } from "../utils/coverDb";
 
 const GOLD = "oklch(0.82 0.17 85)";
 const GOLD_DIM = "oklch(0.62 0.12 85)";
@@ -358,6 +359,13 @@ export function ImportModal({
           if (imgFile) {
             try {
               coverImageUrl = await readFileAsBase64(imgFile);
+              // Pre-save cover to IDB keyed by title immediately during parse.
+              // This ensures covers survive the backend ID assignment race during
+              // bulk import: fetchEntries will look up covers by title for any
+              // entry whose addEntry hasn't completed yet.
+              if (coverImageUrl) {
+                await saveCoverByTitleIDB(entry.mainTitle, coverImageUrl);
+              }
             } catch {
               // Image read failed, skip it
             }

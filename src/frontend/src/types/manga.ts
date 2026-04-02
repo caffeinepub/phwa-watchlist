@@ -68,6 +68,8 @@ export type SortOption =
   | "title-desc"
   | "rating-desc"
   | "rating-asc"
+  | "cen-lvl-desc"
+  | "cen-lvl-asc"
   | "chapter-progress"
   | "updated-desc";
 

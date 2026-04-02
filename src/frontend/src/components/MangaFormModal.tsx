@@ -119,10 +119,10 @@ export function MangaFormModal({
       if (Number.isNaN(r) || r < 1 || r > 10)
         errs.artRating = "Art rating must be 1–10";
     }
-    if (cenLvl) {
+    if (cenLvl !== "") {
       const r = Number(cenLvl);
-      if (Number.isNaN(r) || r < 1 || r > 10)
-        errs.cenLvl = "Cen LVL must be 1–10";
+      if (Number.isNaN(r) || r < 0 || r > 10)
+        errs.cenLvl = "Cen LVL must be 0–10";
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -143,7 +143,7 @@ export function MangaFormModal({
         totalChapters: totalChapters ? Number(totalChapters) : undefined,
         rating: rating ? Number(rating) : undefined,
         artRating: artRating ? Number(artRating) : undefined,
-        cenLvl: cenLvl ? Number(cenLvl) : undefined,
+        cenLvl: cenLvl !== "" ? Number(cenLvl) : undefined,
         coverImageUrl: coverImageUrl.trim() || undefined,
         notes: notes.trim(),
         genres,
@@ -489,6 +489,7 @@ export function MangaFormModal({
                       data-ocid="manga.form.chapter_input"
                       type="number"
                       min={0}
+                      step={0.1}
                       value={currentChapter}
                       onChange={(e) => setCurrentChapter(e.target.value)}
                       placeholder="0"
@@ -511,6 +512,7 @@ export function MangaFormModal({
                       data-ocid="manga.form.total_chapters_input"
                       type="number"
                       min={0}
+                      step={0.1}
                       value={totalChapters}
                       onChange={(e) => setTotalChapters(e.target.value)}
                       placeholder="? (optional)"
@@ -581,12 +583,12 @@ export function MangaFormModal({
                   </div>
                   <div className="space-y-1.5">
                     <Label style={{ color: GOLD_DIM, fontSize: "0.8125rem" }}>
-                      Cen LVL (1–10, optional)
+                      Cen LVL (0–10, optional)
                     </Label>
                     <Input
                       data-ocid="manga.form.cen_lvl_input"
                       type="number"
-                      min={1}
+                      min={0}
                       max={10}
                       step={0.1}
                       value={cenLvl}
