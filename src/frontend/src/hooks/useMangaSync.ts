@@ -27,7 +27,10 @@ const QUEUE_KEY = "manga_sync_queue";
 const LAST_SYNCED_KEY = "manga_last_synced";
 
 // ── x10 encoding helpers (rating/chapters stored as value * 10 in backend) ─────
-const toTenths = (v: number): bigint => BigInt(Math.round(v * 10));
+const toTenths = (v: number): bigint => {
+  const n = Math.round((Number.isFinite(v) ? v : 0) * 10);
+  return BigInt(n);
+};
 
 // ── Serialization helpers for bigint ──────────────────────────────────────────
 

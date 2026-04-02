@@ -326,10 +326,10 @@ export function ImportModal({
 
         // Parse chapters
         const totalChapters = entry.chaptersOwned
-          ? Number.parseInt(entry.chaptersOwned as string, 10) || 0
+          ? Number.parseFloat(entry.chaptersOwned as string) || 0
           : 0;
         const currentChapter = entry.chaptersRead
-          ? Number.parseInt(entry.chaptersRead as string, 10) || 0
+          ? Number.parseFloat(entry.chaptersRead as string) || 0
           : 0;
 
         // Determine status from genres
