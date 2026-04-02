@@ -26,6 +26,9 @@ const CACHE_KEY = "manga_cache";
 const QUEUE_KEY = "manga_sync_queue";
 const LAST_SYNCED_KEY = "manga_last_synced";
 
+// ── x10 encoding helpers (rating/chapters stored as value * 10 in backend) ─────
+const toTenths = (v: number): bigint => BigInt(Math.round(v * 10));
+
 // ── Serialization helpers for bigint ──────────────────────────────────────────
 
 interface SerializedEntry {
@@ -148,9 +151,9 @@ export const SEED_ENTRIES: MangaEntry[] = [
     altTitle1: "Berserk: The Black Swordsman",
     altTitle2: "",
     status: BackendMangaStatus.Reading,
-    currentChapter: BigInt(374),
+    currentChapter: BigInt(3740),
     totalChapters: undefined,
-    rating: BigInt(10),
+    rating: BigInt(100),
     coverImageUrl: undefined,
     notes: "A dark fantasy masterpiece. The art is unparalleled.",
     genres: ["Dark Fantasy", "Action", "Horror"],
@@ -166,9 +169,9 @@ export const SEED_ENTRIES: MangaEntry[] = [
     altTitle1: "Vinurando Saga",
     altTitle2: "",
     status: BackendMangaStatus.Reading,
-    currentChapter: BigInt(194),
+    currentChapter: BigInt(1940),
     totalChapters: undefined,
-    rating: BigInt(9),
+    rating: BigInt(90),
     coverImageUrl: undefined,
     notes: "Themes of war, redemption and what it means to be a warrior.",
     genres: ["Historical", "Action", "Drama"],
@@ -184,9 +187,9 @@ export const SEED_ENTRIES: MangaEntry[] = [
     altTitle1: "Hagane no Renkinjutsushi",
     altTitle2: "FMA",
     status: BackendMangaStatus.Completed,
-    currentChapter: BigInt(108),
-    totalChapters: BigInt(108),
-    rating: BigInt(10),
+    currentChapter: BigInt(1080),
+    totalChapters: BigInt(1080),
+    rating: BigInt(100),
     coverImageUrl: undefined,
     notes: "Perfect ending. Ed and Al's journey is unforgettable.",
     genres: ["Fantasy", "Adventure", "Action"],
@@ -359,11 +362,9 @@ export function useMangaSync(): UseMangaSyncReturn {
               d.altTitle1,
               d.altTitle2,
               d.status as BackendMangaStatus,
-              BigInt(Math.round(d.currentChapter)),
-              d.totalChapters != null
-                ? BigInt(Math.round(d.totalChapters))
-                : null,
-              d.rating != null ? BigInt(Math.round(d.rating)) : null,
+              toTenths(d.currentChapter),
+              d.totalChapters != null ? toTenths(d.totalChapters) : null,
+              d.rating != null ? toTenths(d.rating) : null,
               d.artRating ?? null,
               d.cenLvl ?? null,
               d.coverImageUrl?.startsWith("data:")
@@ -382,11 +383,9 @@ export function useMangaSync(): UseMangaSyncReturn {
               d.altTitle1,
               d.altTitle2,
               d.status as BackendMangaStatus,
-              BigInt(Math.round(d.currentChapter)),
-              d.totalChapters != null
-                ? BigInt(Math.round(d.totalChapters))
-                : null,
-              d.rating != null ? BigInt(Math.round(d.rating)) : null,
+              toTenths(d.currentChapter),
+              d.totalChapters != null ? toTenths(d.totalChapters) : null,
+              d.rating != null ? toTenths(d.rating) : null,
               d.artRating ?? null,
               d.cenLvl ?? null,
               d.coverImageUrl?.startsWith("data:")
@@ -409,16 +408,14 @@ export function useMangaSync(): UseMangaSyncReturn {
             const d = op.payload;
             await actor.updateChapters(
               d.id,
-              BigInt(Math.round(d.currentChapter)),
-              d.totalChapters != null
-                ? BigInt(Math.round(d.totalChapters))
-                : null,
+              toTenths(d.currentChapter),
+              d.totalChapters != null ? toTenths(d.totalChapters) : null,
             );
           } else if (op.type === "updateRating") {
             const d = op.payload;
             await actor.updateRating(
               d.id,
-              d.rating != null ? BigInt(Math.round(d.rating)) : null,
+              d.rating != null ? toTenths(d.rating) : null,
             );
           } else if (op.type === "updateArtRating") {
             const d = op.payload;
@@ -521,11 +518,10 @@ export function useMangaSync(): UseMangaSyncReturn {
         altTitle1: data.altTitle1,
         altTitle2: data.altTitle2,
         status: data.status as BackendMangaStatus,
-        currentChapter: BigInt(data.currentChapter),
+        currentChapter: toTenths(data.currentChapter),
         totalChapters:
-          data.totalChapters != null ? BigInt(data.totalChapters) : undefined,
-        rating:
-          data.rating != null ? BigInt(Math.round(data.rating)) : undefined,
+          data.totalChapters != null ? toTenths(data.totalChapters) : undefined,
+        rating: data.rating != null ? toTenths(data.rating) : undefined,
         artRating: data.artRating,
         cenLvl: data.cenLvl,
         coverImageUrl: data.coverImageUrl,
@@ -567,11 +563,9 @@ export function useMangaSync(): UseMangaSyncReturn {
           data.altTitle1,
           data.altTitle2,
           data.status as BackendMangaStatus,
-          BigInt(Math.round(data.currentChapter)),
-          data.totalChapters != null
-            ? BigInt(Math.round(data.totalChapters))
-            : null,
-          data.rating != null ? BigInt(Math.round(data.rating)) : null,
+          toTenths(data.currentChapter),
+          data.totalChapters != null ? toTenths(data.totalChapters) : null,
+          data.rating != null ? toTenths(data.rating) : null,
           data.artRating ?? null,
           data.cenLvl ?? null,
           null, // never send base64 to backend
@@ -625,15 +619,12 @@ export function useMangaSync(): UseMangaSyncReturn {
                 altTitle1: data.altTitle1,
                 altTitle2: data.altTitle2,
                 status: data.status as BackendMangaStatus,
-                currentChapter: BigInt(data.currentChapter),
+                currentChapter: toTenths(data.currentChapter),
                 totalChapters:
                   data.totalChapters != null
-                    ? BigInt(data.totalChapters)
+                    ? toTenths(data.totalChapters)
                     : undefined,
-                rating:
-                  data.rating != null
-                    ? BigInt(Math.round(data.rating))
-                    : undefined,
+                rating: data.rating != null ? toTenths(data.rating) : undefined,
                 artRating: data.artRating,
                 cenLvl: data.cenLvl,
                 coverImageUrl: data.coverImageUrl,
@@ -671,11 +662,9 @@ export function useMangaSync(): UseMangaSyncReturn {
             data.altTitle1,
             data.altTitle2,
             data.status as BackendMangaStatus,
-            BigInt(Math.round(data.currentChapter)),
-            data.totalChapters != null
-              ? BigInt(Math.round(data.totalChapters))
-              : null,
-            data.rating != null ? BigInt(Math.round(data.rating)) : null,
+            toTenths(data.currentChapter),
+            data.totalChapters != null ? toTenths(data.totalChapters) : null,
+            data.rating != null ? toTenths(data.rating) : null,
             data.artRating ?? null,
             data.cenLvl ?? null,
             null, // never send base64 to backend
@@ -702,11 +691,9 @@ export function useMangaSync(): UseMangaSyncReturn {
             data.altTitle1,
             data.altTitle2,
             data.status as BackendMangaStatus,
-            BigInt(Math.round(data.currentChapter)),
-            data.totalChapters != null
-              ? BigInt(Math.round(data.totalChapters))
-              : null,
-            data.rating != null ? BigInt(Math.round(data.rating)) : null,
+            toTenths(data.currentChapter),
+            data.totalChapters != null ? toTenths(data.totalChapters) : null,
+            data.rating != null ? toTenths(data.rating) : null,
             data.artRating ?? null,
             data.cenLvl ?? null,
             null, // never send base64 to backend
@@ -943,9 +930,9 @@ export function useMangaSync(): UseMangaSyncReturn {
           e.id === id
             ? {
                 ...e,
-                currentChapter: BigInt(currentChapter),
+                currentChapter: toTenths(currentChapter),
                 totalChapters:
-                  totalChapters != null ? BigInt(totalChapters) : undefined,
+                  totalChapters != null ? toTenths(totalChapters) : undefined,
               }
             : e,
         );
@@ -968,8 +955,8 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.updateChapters(
           id,
-          BigInt(Math.round(currentChapter)),
-          totalChapters != null ? BigInt(Math.round(totalChapters)) : null,
+          toTenths(currentChapter),
+          totalChapters != null ? toTenths(totalChapters) : null,
         );
         const storedCover = await loadCoverIDB(id);
         setEntries((prev) => {
@@ -1010,7 +997,7 @@ export function useMangaSync(): UseMangaSyncReturn {
           e.id === id
             ? {
                 ...e,
-                rating: rating != null ? BigInt(Math.round(rating)) : undefined,
+                rating: rating != null ? toTenths(rating) : undefined,
               }
             : e,
         );
@@ -1033,7 +1020,7 @@ export function useMangaSync(): UseMangaSyncReturn {
       try {
         const updated = await actor.updateRating(
           id,
-          rating != null ? BigInt(Math.round(rating)) : null,
+          rating != null ? toTenths(rating) : null,
         );
         const storedCover = await loadCoverIDB(id);
         setEntries((prev) => {

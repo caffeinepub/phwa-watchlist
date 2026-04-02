@@ -71,13 +71,15 @@ export function MangaFormModal({
       setAltTitle1(entry.altTitle1 ?? "");
       setAltTitle2(entry.altTitle2 ?? "");
       setStatus(entry.status as unknown as MangaStatus);
-      setCurrentChapter(Number(entry.currentChapter).toString());
+      setCurrentChapter((Number(entry.currentChapter) / 10).toString());
       setTotalChapters(
         entry.totalChapters != null
-          ? Number(entry.totalChapters).toString()
+          ? (Number(entry.totalChapters) / 10).toString()
           : "",
       );
-      setRating(entry.rating != null ? Number(entry.rating).toString() : "");
+      setRating(
+        entry.rating != null ? (Number(entry.rating) / 10).toString() : "",
+      );
       setArtRating(entry.artRating != null ? String(entry.artRating) : "");
       setCenLvl(entry.cenLvl != null ? String(entry.cenLvl) : "");
       setCoverImageUrl(entry.coverImageUrl ?? "");
@@ -539,7 +541,7 @@ export function MangaFormModal({
                     type="number"
                     min={1}
                     max={10}
-                    step={0.5}
+                    step={0.1}
                     value={rating}
                     onChange={(e) => setRating(e.target.value)}
                     placeholder="e.g. 9.5"

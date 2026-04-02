@@ -724,12 +724,13 @@ export default function App() {
             altTitle1: entry.altTitle1,
             altTitle2: entry.altTitle2,
             status: entry.status as unknown as MangaStatus,
-            currentChapter: Number(entry.currentChapter),
+            currentChapter: Number(entry.currentChapter) / 10,
             totalChapters:
               entry.totalChapters != null
-                ? Number(entry.totalChapters)
+                ? Number(entry.totalChapters) / 10
                 : undefined,
-            rating: entry.rating != null ? Number(entry.rating) : undefined,
+            rating:
+              entry.rating != null ? Number(entry.rating) / 10 : undefined,
             artRating:
               entry.artRating != null ? Number(entry.artRating) : undefined,
             cenLvl: entry.cenLvl != null ? Number(entry.cenLvl) : undefined,
@@ -769,11 +770,12 @@ export default function App() {
             ...(entry.altTitle2 ? { altTitle2: entry.altTitle2 } : {}),
             synopsis: entry.synopsis || "",
             genres: entry.genres,
-            rating: entry.rating != null ? String(Number(entry.rating)) : "N/A",
+            rating:
+              entry.rating != null ? String(Number(entry.rating) / 10) : "N/A",
             cenLVL: entry.cenLvl != null ? String(entry.cenLvl) : "0",
             art: entry.artRating != null ? String(entry.artRating) : "0",
-            chaptersOwned: String(Number(entry.totalChapters ?? 0)),
-            chaptersRead: String(Number(entry.currentChapter)),
+            chaptersOwned: String(Number(entry.totalChapters ?? 0) / 10),
+            chaptersRead: String(Number(entry.currentChapter) / 10),
             personalNotes: entry.notes || "",
             bookmarked: entry.isFavourite,
             imageFilename,
@@ -924,11 +926,12 @@ export default function App() {
         <StatsBar entries={entries} />
 
         {/* Divider */}
-        <div
-          className="mx-4 md:mx-6 h-px"
-          style={{ background: "oklch(0.82 0.17 85 / 0.15)" }}
-          aria-hidden="true"
-        />
+        <div className="flex justify-center px-4 md:px-6" aria-hidden="true">
+          <div
+            className="h-px w-full max-w-[1160px]"
+            style={{ background: "oklch(0.82 0.17 85 / 0.15)" }}
+          />
+        </div>
 
         {/* Toolbar */}
         <Toolbar
@@ -959,364 +962,374 @@ export default function App() {
               overflowY: "auto",
               paddingLeft: "1rem",
               paddingRight: "1rem",
+              display: "flex",
+              justifyContent: "center",
             }}
           >
-            {/* Loading skeleton */}
-            {isLoading && entries.length === 0 && (
-              <div
-                data-ocid="manga.list"
-                className="flex flex-col gap-3"
-                style={{ minWidth: 1100 }}
-              >
-                {Array.from({ length: 5 }, (_, i) => `skeleton-${i}`).map(
-                  (key) => (
-                    <div
-                      key={key}
-                      className="rounded-lg overflow-hidden flex flex-row"
-                      style={{
-                        width: 1100,
-                        height: 119,
-                        border: "1px solid oklch(0.82 0.17 85 / 0.2)",
-                      }}
-                    >
-                      {/* Cover skeleton */}
-                      <div
-                        style={{
-                          width: 115,
-                          height: 119,
-                          flexShrink: 0,
-                          background:
-                            "linear-gradient(90deg, oklch(0.05 0 0) 25%, oklch(0.08 0 0) 50%, oklch(0.05 0 0) 75%)",
-                          backgroundSize: "200% 100%",
-                          animation: "shimmer 1.5s linear infinite",
-                        }}
-                      />
-                      {/* Title skeleton */}
-                      <div
-                        style={{
-                          width: 240,
-                          height: 119,
-                          flexShrink: 0,
-                          padding: "12px 10px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                          borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
-                        }}
-                      >
-                        <div
-                          className="h-3 rounded"
-                          style={{ background: "oklch(0.1 0 0)", width: "90%" }}
-                        />
-                        <div
-                          className="h-3 rounded"
-                          style={{
-                            background: "oklch(0.08 0 0)",
-                            width: "70%",
-                          }}
-                        />
-                        <div
-                          className="h-3 rounded"
-                          style={{
-                            background: "oklch(0.07 0 0)",
-                            width: "55%",
-                          }}
-                        />
-                      </div>
-                      {/* Info skeleton */}
-                      <div
-                        style={{
-                          flex: 1,
-                          height: 119,
-                          padding: "12px 14px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                          justifyContent: "center",
-                          borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
-                        }}
-                      >
-                        <div
-                          className="h-4 rounded"
-                          style={{ background: "oklch(0.1 0 0)", width: 80 }}
-                        />
-                        <div
-                          className="h-2 rounded"
-                          style={{ background: "oklch(0.08 0 0)", width: 120 }}
-                        />
-                        <div
-                          className="h-2 rounded"
-                          style={{ background: "oklch(0.07 0 0)", width: 90 }}
-                        />
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!isLoading && visibleEntries.length === 0 && (
-              <div
-                data-ocid="manga.empty_state"
-                className="flex flex-col items-center justify-center py-20 gap-4"
-              >
+            <div style={{ width: "100%", maxWidth: "1160px" }}>
+              {/* Loading skeleton */}
+              {isLoading && entries.length === 0 && (
                 <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{ border: "1px solid oklch(0.82 0.17 85 / 0.3)" }}
+                  data-ocid="manga.list"
+                  className="flex flex-col gap-3"
+                  style={{ minWidth: 1100 }}
                 >
-                  <BookOpen
-                    size={28}
-                    style={{ color: "oklch(0.82 0.17 85 / 0.4)" }}
-                    strokeWidth={1}
-                  />
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="font-semibold" style={{ color: GOLD_DIM }}>
-                    {showFavouritesOnly
-                      ? "No favourites yet"
-                      : search ||
-                          statusFilter !== "all" ||
-                          genreFilter.length > 0
-                        ? "No results found"
-                        : "Your watchlist is empty"}
-                  </p>
-                  <p
-                    className="text-sm"
-                    style={{ color: "oklch(0.40 0.08 85)" }}
-                  >
-                    {showFavouritesOnly
-                      ? "Click the heart icon on any title to favourite it"
-                      : search ||
-                          statusFilter !== "all" ||
-                          genreFilter.length > 0
-                        ? "Try adjusting your filters"
-                        : "Add your first manga to get started"}
-                  </p>
-                </div>
-                {!showFavouritesOnly &&
-                  !search &&
-                  statusFilter === "all" &&
-                  genreFilter.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={handleAddClick}
-                      className="text-sm font-medium px-4 py-2 rounded transition-all duration-200"
-                      style={{
-                        border: `1px solid ${GOLD}`,
-                        color: GOLD,
-                        background: "transparent",
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = GOLD;
-                        el.style.color = "#000";
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = "transparent";
-                        el.style.color = GOLD;
-                      }}
-                    >
-                      Add your first manga
-                    </button>
+                  {Array.from({ length: 5 }, (_, i) => `skeleton-${i}`).map(
+                    (key) => (
+                      <div
+                        key={key}
+                        className="rounded-lg overflow-hidden flex flex-row"
+                        style={{
+                          width: 1100,
+                          height: 119,
+                          border: "1px solid oklch(0.82 0.17 85 / 0.2)",
+                        }}
+                      >
+                        {/* Cover skeleton */}
+                        <div
+                          style={{
+                            width: 115,
+                            height: 119,
+                            flexShrink: 0,
+                            background:
+                              "linear-gradient(90deg, oklch(0.05 0 0) 25%, oklch(0.08 0 0) 50%, oklch(0.05 0 0) 75%)",
+                            backgroundSize: "200% 100%",
+                            animation: "shimmer 1.5s linear infinite",
+                          }}
+                        />
+                        {/* Title skeleton */}
+                        <div
+                          style={{
+                            width: 240,
+                            height: 119,
+                            flexShrink: 0,
+                            padding: "12px 10px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                            borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
+                          }}
+                        >
+                          <div
+                            className="h-3 rounded"
+                            style={{
+                              background: "oklch(0.1 0 0)",
+                              width: "90%",
+                            }}
+                          />
+                          <div
+                            className="h-3 rounded"
+                            style={{
+                              background: "oklch(0.08 0 0)",
+                              width: "70%",
+                            }}
+                          />
+                          <div
+                            className="h-3 rounded"
+                            style={{
+                              background: "oklch(0.07 0 0)",
+                              width: "55%",
+                            }}
+                          />
+                        </div>
+                        {/* Info skeleton */}
+                        <div
+                          style={{
+                            flex: 1,
+                            height: 119,
+                            padding: "12px 14px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                            justifyContent: "center",
+                            borderLeft: "1px solid oklch(0.82 0.17 85 / 0.1)",
+                          }}
+                        >
+                          <div
+                            className="h-4 rounded"
+                            style={{ background: "oklch(0.1 0 0)", width: 80 }}
+                          />
+                          <div
+                            className="h-2 rounded"
+                            style={{
+                              background: "oklch(0.08 0 0)",
+                              width: 120,
+                            }}
+                          />
+                          <div
+                            className="h-2 rounded"
+                            style={{ background: "oklch(0.07 0 0)", width: 90 }}
+                          />
+                        </div>
+                      </div>
+                    ),
                   )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* List */}
-            {visibleEntries.length > 0 && (
-              <div
-                data-ocid="manga.list"
-                className="flex flex-col gap-3"
-                style={{ minWidth: 1100 }}
-              >
-                <AnimatePresence mode="popLayout">
-                  {pagedEntries.map((entry, index) => (
-                    <MangaCard
-                      key={entry.id}
-                      entry={entry}
-                      index={index}
-                      onEdit={handleEditClick}
-                      onDelete={handleDeleteClick}
-                      onToggleFavourite={handleToggleFavourite}
-                      onQuickStatusChange={handleQuickStatusChange}
-                      onQuickChapterChange={handleQuickChapterChange}
-                      onQuickRatingChange={handleQuickRatingChange}
-                      onQuickArtRatingChange={handleQuickArtRatingChange}
-                      onQuickCenLvlChange={handleQuickCenLvlChange}
-                      onQuickNotesChange={handleQuickNotesChange}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-            )}
-          </div>
-
-          {/* Pagination — outside scroll container so always visible */}
-          {totalPages > 1 && (
-            <div
-              className="flex items-center justify-center gap-3 px-4 pt-4 pb-2 flex-wrap"
-              style={{ color: GOLD_DIM }}
-            >
-              {/* Previous button */}
-              <button
-                type="button"
-                data-ocid="pagination.pagination_prev"
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="flex items-center justify-center w-8 h-8 rounded transition-all duration-150"
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${currentPage === 1 ? "oklch(0.82 0.17 85 / 0.2)" : GOLD}`,
-                  color:
-                    currentPage === 1 ? "oklch(0.82 0.17 85 / 0.25)" : GOLD,
-                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (currentPage !== 1) {
-                    const el = e.currentTarget;
-                    el.style.background = GOLD;
-                    el.style.color = "#000";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentPage !== 1) {
-                    const el = e.currentTarget;
-                    el.style.background = "transparent";
-                    el.style.color = GOLD;
-                  }
-                }}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={16} strokeWidth={2} />
-              </button>
-
-              {/* Page indicator */}
-              <span
-                className="text-sm font-medium"
-                style={{ color: GOLD_DIM, minWidth: 80, textAlign: "center" }}
-              >
-                Page {currentPage} of {totalPages}
-              </span>
-
-              {/* Next button */}
-              <button
-                type="button"
-                data-ocid="pagination.pagination_next"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="flex items-center justify-center w-8 h-8 rounded transition-all duration-150"
-                style={{
-                  background: "transparent",
-                  border: `1px solid ${currentPage === totalPages ? "oklch(0.82 0.17 85 / 0.2)" : GOLD}`,
-                  color:
-                    currentPage === totalPages
-                      ? "oklch(0.82 0.17 85 / 0.25)"
-                      : GOLD,
-                  cursor:
-                    currentPage === totalPages ? "not-allowed" : "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (currentPage !== totalPages) {
-                    const el = e.currentTarget;
-                    el.style.background = GOLD;
-                    el.style.color = "#000";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentPage !== totalPages) {
-                    const el = e.currentTarget;
-                    el.style.background = "transparent";
-                    el.style.color = GOLD;
-                  }
-                }}
-                aria-label="Next page"
-              >
-                <ChevronRight size={16} strokeWidth={2} />
-              </button>
-
-              {/* Go to page input */}
-              <div className="flex items-center gap-2 ml-2">
-                <span
-                  className="text-xs"
-                  style={{ color: "oklch(0.50 0.08 85)" }}
+              {/* Empty state */}
+              {!isLoading && visibleEntries.length === 0 && (
+                <div
+                  data-ocid="manga.empty_state"
+                  className="flex flex-col items-center justify-center py-20 gap-4"
                 >
-                  Go to:
+                  <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center"
+                    style={{ border: "1px solid oklch(0.82 0.17 85 / 0.3)" }}
+                  >
+                    <BookOpen
+                      size={28}
+                      style={{ color: "oklch(0.82 0.17 85 / 0.4)" }}
+                      strokeWidth={1}
+                    />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="font-semibold" style={{ color: GOLD_DIM }}>
+                      {showFavouritesOnly
+                        ? "No favourites yet"
+                        : search ||
+                            statusFilter !== "all" ||
+                            genreFilter.length > 0
+                          ? "No results found"
+                          : "Your watchlist is empty"}
+                    </p>
+                    <p
+                      className="text-sm"
+                      style={{ color: "oklch(0.40 0.08 85)" }}
+                    >
+                      {showFavouritesOnly
+                        ? "Click the heart icon on any title to favourite it"
+                        : search ||
+                            statusFilter !== "all" ||
+                            genreFilter.length > 0
+                          ? "Try adjusting your filters"
+                          : "Add your first manga to get started"}
+                    </p>
+                  </div>
+                  {!showFavouritesOnly &&
+                    !search &&
+                    statusFilter === "all" &&
+                    genreFilter.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleAddClick}
+                        className="text-sm font-medium px-4 py-2 rounded transition-all duration-200"
+                        style={{
+                          border: `1px solid ${GOLD}`,
+                          color: GOLD,
+                          background: "transparent",
+                        }}
+                        onMouseEnter={(e) => {
+                          const el = e.currentTarget;
+                          el.style.background = GOLD;
+                          el.style.color = "#000";
+                        }}
+                        onMouseLeave={(e) => {
+                          const el = e.currentTarget;
+                          el.style.background = "transparent";
+                          el.style.color = GOLD;
+                        }}
+                      >
+                        Add your first manga
+                      </button>
+                    )}
+                </div>
+              )}
+
+              {/* List */}
+              {visibleEntries.length > 0 && (
+                <div
+                  data-ocid="manga.list"
+                  className="flex flex-col gap-3"
+                  style={{ minWidth: 1100 }}
+                >
+                  <AnimatePresence mode="popLayout">
+                    {pagedEntries.map((entry, index) => (
+                      <MangaCard
+                        key={entry.id}
+                        entry={entry}
+                        index={index}
+                        onEdit={handleEditClick}
+                        onDelete={handleDeleteClick}
+                        onToggleFavourite={handleToggleFavourite}
+                        onQuickStatusChange={handleQuickStatusChange}
+                        onQuickChapterChange={handleQuickChapterChange}
+                        onQuickRatingChange={handleQuickRatingChange}
+                        onQuickArtRatingChange={handleQuickArtRatingChange}
+                        onQuickCenLvlChange={handleQuickCenLvlChange}
+                        onQuickNotesChange={handleQuickNotesChange}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination — outside scroll container so always visible */}
+            {totalPages > 1 && (
+              <div
+                className="flex items-center justify-center gap-3 px-4 pt-4 pb-2 flex-wrap"
+                style={{ color: GOLD_DIM }}
+              >
+                {/* Previous button */}
+                <button
+                  type="button"
+                  data-ocid="pagination.pagination_prev"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center justify-center w-8 h-8 rounded transition-all duration-150"
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${currentPage === 1 ? "oklch(0.82 0.17 85 / 0.2)" : GOLD}`,
+                    color:
+                      currentPage === 1 ? "oklch(0.82 0.17 85 / 0.25)" : GOLD,
+                    cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (currentPage !== 1) {
+                      const el = e.currentTarget;
+                      el.style.background = GOLD;
+                      el.style.color = "#000";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (currentPage !== 1) {
+                      const el = e.currentTarget;
+                      el.style.background = "transparent";
+                      el.style.color = GOLD;
+                    }
+                  }}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} strokeWidth={2} />
+                </button>
+
+                {/* Page indicator */}
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: GOLD_DIM, minWidth: 80, textAlign: "center" }}
+                >
+                  Page {currentPage} of {totalPages}
                 </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={pageInputValue}
-                  data-ocid="pagination.page_input"
-                  onChange={(e) => setPageInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+
+                {/* Next button */}
+                <button
+                  type="button"
+                  data-ocid="pagination.pagination_next"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center justify-center w-8 h-8 rounded transition-all duration-150"
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${currentPage === totalPages ? "oklch(0.82 0.17 85 / 0.2)" : GOLD}`,
+                    color:
+                      currentPage === totalPages
+                        ? "oklch(0.82 0.17 85 / 0.25)"
+                        : GOLD,
+                    cursor:
+                      currentPage === totalPages ? "not-allowed" : "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (currentPage !== totalPages) {
+                      const el = e.currentTarget;
+                      el.style.background = GOLD;
+                      el.style.color = "#000";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (currentPage !== totalPages) {
+                      const el = e.currentTarget;
+                      el.style.background = "transparent";
+                      el.style.color = GOLD;
+                    }
+                  }}
+                  aria-label="Next page"
+                >
+                  <ChevronRight size={16} strokeWidth={2} />
+                </button>
+
+                {/* Go to page input */}
+                <div className="flex items-center gap-2 ml-2">
+                  <span
+                    className="text-xs"
+                    style={{ color: "oklch(0.50 0.08 85)" }}
+                  >
+                    Go to:
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInputValue}
+                    data-ocid="pagination.page_input"
+                    onChange={(e) => setPageInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const parsed = Number.parseInt(pageInputValue, 10);
+                        if (!Number.isNaN(parsed)) {
+                          goToPage(parsed);
+                        }
+                      }
+                    }}
+                    onBlur={() => {
                       const parsed = Number.parseInt(pageInputValue, 10);
                       if (!Number.isNaN(parsed)) {
                         goToPage(parsed);
+                      } else {
+                        setPageInputValue(String(currentPage));
                       }
-                    }
-                  }}
-                  onBlur={() => {
-                    const parsed = Number.parseInt(pageInputValue, 10);
-                    if (!Number.isNaN(parsed)) {
-                      goToPage(parsed);
-                    } else {
-                      setPageInputValue(String(currentPage));
-                    }
-                  }}
-                  className="text-center text-sm"
-                  style={{
-                    width: 52,
-                    background: "#000",
-                    border: "1px solid oklch(0.82 0.17 85 / 0.4)",
-                    color: GOLD,
-                    borderRadius: "0.25rem",
-                    padding: "3px 6px",
-                    outline: "none",
-                  }}
-                  aria-label="Go to page number"
-                />
+                    }}
+                    className="text-center text-sm"
+                    style={{
+                      width: 52,
+                      background: "#000",
+                      border: "1px solid oklch(0.82 0.17 85 / 0.4)",
+                      color: GOLD,
+                      borderRadius: "0.25rem",
+                      padding: "3px 6px",
+                      outline: "none",
+                    }}
+                    aria-label="Go to page number"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="px-4 md:px-6 py-4 mt-auto">
-        <div
-          className="h-px mb-4"
-          style={{ background: "oklch(0.82 0.17 85 / 0.1)" }}
-          aria-hidden="true"
-        />
-        <p
-          className="text-center text-xs"
-          style={{ color: "oklch(0.40 0.08 85)" }}
-        >
-          © {new Date().getFullYear()}. Built with{" "}
-          <span style={{ color: GOLD_DIM }}>♥</span> using{" "}
-          <a
-            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors"
-            style={{ color: GOLD_DIM }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = GOLD;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = GOLD_DIM;
-            }}
-          >
-            caffeine.ai
-          </a>
-        </p>
+      <footer className="py-4 mt-auto">
+        <div className="flex justify-center px-4 md:px-6">
+          <div className="w-full max-w-[1160px]">
+            <div
+              className="h-px mb-4"
+              style={{ background: "oklch(0.82 0.17 85 / 0.1)" }}
+              aria-hidden="true"
+            />
+            <p
+              className="text-center text-xs"
+              style={{ color: "oklch(0.40 0.08 85)" }}
+            >
+              © {new Date().getFullYear()}. Built with{" "}
+              <span style={{ color: GOLD_DIM }}>♥</span> using{" "}
+              <a
+                href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors"
+                style={{ color: GOLD_DIM }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = GOLD;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = GOLD_DIM;
+                }}
+              >
+                caffeine.ai
+              </a>
+            </p>
+          </div>
+        </div>
       </footer>
-
-      {/* Modals */}
       <MangaFormModal
         open={formOpen}
         entry={editingEntry}
@@ -1341,8 +1354,6 @@ export default function App() {
         existingEntries={entries}
         onImportEntry={handleImportEntry}
       />
-
-      {/* Delete All confirmation dialog */}
       <DeleteAllConfirmDialog
         open={deleteAllOpen}
         entryCount={entries.length}

@@ -68,10 +68,12 @@ export function StatsBar({ entries }: StatsBarProps) {
 
   return (
     <div className="w-full overflow-x-auto pb-1">
-      <div className="flex gap-2 min-w-max px-4 md:px-6">
-        {stats.map((s, i) => (
-          <StatPill key={s.label} {...s} index={i} />
-        ))}
+      <div className="flex justify-center px-4 md:px-6">
+        <div className="flex gap-2 min-w-max max-w-[1160px] w-full">
+          {stats.map((s, i) => (
+            <StatPill key={s.label} {...s} index={i} />
+          ))}
+        </div>
       </div>
     </div>
   );

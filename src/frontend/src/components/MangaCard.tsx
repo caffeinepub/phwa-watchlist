@@ -1251,10 +1251,10 @@ export function MangaCard({
       const rect = chapterTriggerRef.current?.getBoundingClientRect();
       if (rect) {
         setChapterAnchorRect(rect);
-        setChapterCurrentInput(Number(entry.currentChapter).toString());
+        setChapterCurrentInput((Number(entry.currentChapter) / 10).toString());
         setChapterTotalInput(
           entry.totalChapters != null
-            ? Number(entry.totalChapters).toString()
+            ? (Number(entry.totalChapters) / 10).toString()
             : "",
         );
         setChapterPopupOpen(true);
@@ -1270,7 +1270,7 @@ export function MangaCard({
       if (rect) {
         setRatingAnchorRect(rect);
         setRatingInput(
-          entry.rating != null ? Number(entry.rating).toString() : "",
+          entry.rating != null ? (Number(entry.rating) / 10).toString() : "",
         );
         setRatingPopupOpen(true);
       }
@@ -1317,7 +1317,7 @@ export function MangaCard({
     const raw = ratingInput ? Number(ratingInput) : undefined;
     if (raw !== undefined) {
       if (raw < 1 || raw > 10) return;
-      const snapped = Math.round(raw * 2) / 2;
+      const snapped = Math.round(raw * 10) / 10;
       onQuickRatingChange(entry, snapped);
     } else {
       onQuickRatingChange(entry, undefined);
@@ -1580,10 +1580,10 @@ export function MangaCard({
           aria-label="Edit chapter progress"
         >
           <ChapterProgress
-            current={Number(entry.currentChapter)}
+            current={Number(entry.currentChapter) / 10}
             total={
               entry.totalChapters != null
-                ? Number(entry.totalChapters)
+                ? Number(entry.totalChapters) / 10
                 : undefined
             }
           />
@@ -1617,7 +1617,7 @@ export function MangaCard({
             title="Click to edit rating"
             aria-label="Edit rating"
           >
-            <StarRating rating={Number(entry.rating)} />
+            <StarRating rating={Number(entry.rating) / 10} />
           </button>
         ) : (
           <button
@@ -2106,7 +2106,7 @@ export function MangaCard({
                 type="number"
                 min={1}
                 max={10}
-                step={0.5}
+                step={0.1}
                 value={ratingInput}
                 onChange={(e) => setRatingInput(e.target.value)}
                 placeholder="e.g. 9.5"

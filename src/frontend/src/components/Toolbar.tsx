@@ -297,270 +297,276 @@ export function Toolbar({
   onDeleteAllClick,
 }: ToolbarProps) {
   return (
-    <div className="flex flex-col gap-2 px-4 md:px-6">
-      {/* Row 1: Search + Add */}
-      <div className="flex gap-2 items-center">
-        <div className="relative" style={{ width: 240, flexShrink: 0 }}>
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ color: GOLD_DIM }}
-          />
-          <Input
-            data-ocid="manga.search_input"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search…"
-            style={{ ...inputStyle, paddingLeft: "2.25rem" }}
-            aria-label="Search manga"
-          />
+    <div className="w-full flex justify-center px-4 md:px-6">
+      <div className="flex flex-col gap-2 w-full max-w-[1160px]">
+        {/* Row 1: Search + Add */}
+        <div className="flex gap-2 items-center">
+          <div className="relative" style={{ width: 240, flexShrink: 0 }}>
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: GOLD_DIM }}
+            />
+            <Input
+              data-ocid="manga.search_input"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search…"
+              style={{ ...inputStyle, paddingLeft: "2.25rem" }}
+              aria-label="Search manga"
+            />
+          </div>
+
+          {/* Search scope dropdown */}
+          <Select
+            value={searchScope}
+            onValueChange={(v) =>
+              onSearchScopeChange(v as "titles" | "notes" | "synopsis")
+            }
+          >
+            <SelectTrigger
+              data-ocid="manga.search_scope.select"
+              className="h-9 text-xs shrink-0"
+              style={{ ...inputStyle, height: "2.25rem", minWidth: "110px" }}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent style={selectContentStyle}>
+              <SelectItem value="titles" style={{ color: GOLD }}>
+                Titles
+              </SelectItem>
+              <SelectItem value="notes" style={{ color: GOLD }}>
+                Notes
+              </SelectItem>
+              <SelectItem value="synopsis" style={{ color: GOLD }}>
+                Synopsis
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Favourites filter button */}
+          <button
+            type="button"
+            data-ocid="manga.favourites_filter.toggle"
+            onClick={onToggleFavouritesFilter}
+            aria-label={
+              showFavouritesOnly ? "Show all manga" : "Show favourites only"
+            }
+            title={
+              showFavouritesOnly ? "Show all manga" : "Show favourites only"
+            }
+            className="h-9 w-9 shrink-0 flex items-center justify-center rounded transition-all duration-200"
+            style={{
+              background: showFavouritesOnly
+                ? "oklch(0.75 0.22 0 / 0.12)"
+                : "transparent",
+              border: showFavouritesOnly
+                ? `1.5px solid ${PINK}`
+                : "1.5px solid oklch(0.82 0.17 85 / 0.5)",
+              color: showFavouritesOnly ? PINK : GOLD_DIM,
+            }}
+          >
+            <Heart
+              size={15}
+              strokeWidth={showFavouritesOnly ? 0 : 1.5}
+              style={{
+                fill: showFavouritesOnly ? PINK : "transparent",
+                color: showFavouritesOnly ? PINK : GOLD_DIM,
+                transition: "fill 0.2s, color 0.2s",
+              }}
+            />
+          </button>
+
+          <Button
+            data-ocid="manga.add_button"
+            onClick={onAddClick}
+            className="h-9 px-4 shrink-0 font-semibold text-sm transition-all duration-200"
+            style={{
+              background: "transparent",
+              border: `1.5px solid ${GOLD}`,
+              color: GOLD,
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = GOLD;
+              el.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "transparent";
+              el.style.color = GOLD;
+            }}
+          >
+            <Plus size={15} className="mr-1.5" strokeWidth={2.5} />
+            <span className="hidden sm:inline">Add Manga</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+
+          {/* Import button */}
+          <button
+            type="button"
+            data-ocid="toolbar.import_button"
+            onClick={onImportClick}
+            className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+            style={{
+              background: "transparent",
+              border: `1.5px solid ${GOLD}`,
+              color: GOLD,
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = GOLD;
+              el.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "transparent";
+              el.style.color = GOLD;
+            }}
+            aria-label="Import watchlist"
+            title="Import watchlist"
+          >
+            <Upload size={14} strokeWidth={2} />
+            <span className="hidden sm:inline">Import</span>
+          </button>
+
+          {/* Export button */}
+          <button
+            type="button"
+            data-ocid="toolbar.export_button"
+            onClick={onExportClick}
+            className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+            style={{
+              background: "transparent",
+              border: `1.5px solid ${GOLD}`,
+              color: GOLD,
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = GOLD;
+              el.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "transparent";
+              el.style.color = GOLD;
+            }}
+            aria-label="Export watchlist"
+            title="Export watchlist"
+          >
+            <Download size={14} strokeWidth={2} />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+
+          {/* Delete All button */}
+          <button
+            type="button"
+            data-ocid="toolbar.delete_all_button"
+            onClick={onDeleteAllClick}
+            className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
+            style={{
+              background: "transparent",
+              border: "1.5px solid oklch(0.65 0.22 25 / 0.7)",
+              color: "oklch(0.65 0.22 25)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "oklch(0.65 0.22 25 / 0.15)";
+              el.style.borderColor = "oklch(0.65 0.22 25)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "transparent";
+              el.style.borderColor = "oklch(0.65 0.22 25 / 0.7)";
+            }}
+            aria-label="Delete all entries"
+            title="Delete all entries"
+          >
+            <Trash2 size={14} strokeWidth={2} />
+            <span className="hidden sm:inline">Delete All</span>
+          </button>
         </div>
 
-        {/* Search scope dropdown */}
-        <Select
-          value={searchScope}
-          onValueChange={(v) =>
-            onSearchScopeChange(v as "titles" | "notes" | "synopsis")
-          }
-        >
-          <SelectTrigger
-            data-ocid="manga.search_scope.select"
-            className="h-9 text-xs shrink-0"
-            style={{ ...inputStyle, height: "2.25rem", minWidth: "110px" }}
+        {/* Row 2: Filters */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <SlidersHorizontal size={13} style={{ color: GOLD_DIM }} />
+
+          {/* Status filter */}
+          <Select
+            value={statusFilter}
+            onValueChange={(v) =>
+              onStatusFilterChange(v as MangaStatus | "all")
+            }
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent style={selectContentStyle}>
-            <SelectItem value="titles" style={{ color: GOLD }}>
-              Titles
-            </SelectItem>
-            <SelectItem value="notes" style={{ color: GOLD }}>
-              Notes
-            </SelectItem>
-            <SelectItem value="synopsis" style={{ color: GOLD }}>
-              Synopsis
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Favourites filter button */}
-        <button
-          type="button"
-          data-ocid="manga.favourites_filter.toggle"
-          onClick={onToggleFavouritesFilter}
-          aria-label={
-            showFavouritesOnly ? "Show all manga" : "Show favourites only"
-          }
-          title={showFavouritesOnly ? "Show all manga" : "Show favourites only"}
-          className="h-9 w-9 shrink-0 flex items-center justify-center rounded transition-all duration-200"
-          style={{
-            background: showFavouritesOnly
-              ? "oklch(0.75 0.22 0 / 0.12)"
-              : "transparent",
-            border: showFavouritesOnly
-              ? `1.5px solid ${PINK}`
-              : "1.5px solid oklch(0.82 0.17 85 / 0.5)",
-            color: showFavouritesOnly ? PINK : GOLD_DIM,
-          }}
-        >
-          <Heart
-            size={15}
-            strokeWidth={showFavouritesOnly ? 0 : 1.5}
-            style={{
-              fill: showFavouritesOnly ? PINK : "transparent",
-              color: showFavouritesOnly ? PINK : GOLD_DIM,
-              transition: "fill 0.2s, color 0.2s",
-            }}
-          />
-        </button>
-
-        <Button
-          data-ocid="manga.add_button"
-          onClick={onAddClick}
-          className="h-9 px-4 shrink-0 font-semibold text-sm transition-all duration-200"
-          style={{
-            background: "transparent",
-            border: `1.5px solid ${GOLD}`,
-            color: GOLD,
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.background = GOLD;
-            el.style.color = "#000";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "transparent";
-            el.style.color = GOLD;
-          }}
-        >
-          <Plus size={15} className="mr-1.5" strokeWidth={2.5} />
-          <span className="hidden sm:inline">Add Manga</span>
-          <span className="sm:hidden">Add</span>
-        </Button>
-
-        {/* Import button */}
-        <button
-          type="button"
-          data-ocid="toolbar.import_button"
-          onClick={onImportClick}
-          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
-          style={{
-            background: "transparent",
-            border: `1.5px solid ${GOLD}`,
-            color: GOLD,
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.background = GOLD;
-            el.style.color = "#000";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "transparent";
-            el.style.color = GOLD;
-          }}
-          aria-label="Import watchlist"
-          title="Import watchlist"
-        >
-          <Upload size={14} strokeWidth={2} />
-          <span className="hidden sm:inline">Import</span>
-        </button>
-
-        {/* Export button */}
-        <button
-          type="button"
-          data-ocid="toolbar.export_button"
-          onClick={onExportClick}
-          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
-          style={{
-            background: "transparent",
-            border: `1.5px solid ${GOLD}`,
-            color: GOLD,
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.background = GOLD;
-            el.style.color = "#000";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "transparent";
-            el.style.color = GOLD;
-          }}
-          aria-label="Export watchlist"
-          title="Export watchlist"
-        >
-          <Download size={14} strokeWidth={2} />
-          <span className="hidden sm:inline">Export</span>
-        </button>
-
-        {/* Delete All button */}
-        <button
-          type="button"
-          data-ocid="toolbar.delete_all_button"
-          onClick={onDeleteAllClick}
-          className="h-9 px-3 shrink-0 flex items-center gap-1.5 text-sm font-semibold rounded transition-all duration-200"
-          style={{
-            background: "transparent",
-            border: "1.5px solid oklch(0.65 0.22 25 / 0.7)",
-            color: "oklch(0.65 0.22 25)",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "oklch(0.65 0.22 25 / 0.15)";
-            el.style.borderColor = "oklch(0.65 0.22 25)";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "transparent";
-            el.style.borderColor = "oklch(0.65 0.22 25 / 0.7)";
-          }}
-          aria-label="Delete all entries"
-          title="Delete all entries"
-        >
-          <Trash2 size={14} strokeWidth={2} />
-          <span className="hidden sm:inline">Delete All</span>
-        </button>
-      </div>
-
-      {/* Row 2: Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <SlidersHorizontal size={13} style={{ color: GOLD_DIM }} />
-
-        {/* Status filter */}
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => onStatusFilterChange(v as MangaStatus | "all")}
-        >
-          <SelectTrigger
-            data-ocid="manga.status_filter.select"
-            className="h-8 text-xs"
-            style={{ ...inputStyle, height: "2rem", minWidth: "130px" }}
-          >
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent style={selectContentStyle}>
-            <SelectItem value="all" style={{ color: GOLD }}>
-              All Status
-            </SelectItem>
-            {Object.values(MangaStatus).map((s) => (
-              <SelectItem key={s} value={s} style={{ color: GOLD }}>
-                {STATUS_LABELS[s]}
+            <SelectTrigger
+              data-ocid="manga.status_filter.select"
+              className="h-8 text-xs"
+              style={{ ...inputStyle, height: "2rem", minWidth: "130px" }}
+            >
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent style={selectContentStyle}>
+              <SelectItem value="all" style={{ color: GOLD }}>
+                All Status
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {Object.values(MangaStatus).map((s) => (
+                <SelectItem key={s} value={s} style={{ color: GOLD }}>
+                  {STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {/* Genre filter — multi-select checkboxes */}
-        <GenreFilterDropdown
-          allGenres={allGenres}
-          genreFilter={genreFilter}
-          onGenreFilterChange={onGenreFilterChange}
-        />
+          {/* Genre filter — multi-select checkboxes */}
+          <GenreFilterDropdown
+            allGenres={allGenres}
+            genreFilter={genreFilter}
+            onGenreFilterChange={onGenreFilterChange}
+          />
 
-        {/* Sort */}
-        <Select
-          value={sortOption}
-          onValueChange={(v) => onSortChange(v as SortOption)}
-        >
-          <SelectTrigger
-            data-ocid="manga.sort.select"
-            className="h-8 text-xs"
-            style={{ ...inputStyle, height: "2rem", minWidth: "160px" }}
+          {/* Sort */}
+          <Select
+            value={sortOption}
+            onValueChange={(v) => onSortChange(v as SortOption)}
           >
-            <SelectValue placeholder="Sort by…" />
-          </SelectTrigger>
-          <SelectContent style={selectContentStyle}>
-            <SelectItem value="updated-desc" style={{ color: GOLD }}>
-              Recently Updated
-            </SelectItem>
-            <SelectItem value="title-asc" style={{ color: GOLD }}>
-              Title A → Z
-            </SelectItem>
-            <SelectItem value="title-desc" style={{ color: GOLD }}>
-              Title Z → A
-            </SelectItem>
-            <SelectItem value="rating-desc" style={{ color: GOLD }}>
-              Rating High → Low
-            </SelectItem>
-            <SelectItem value="rating-asc" style={{ color: GOLD }}>
-              Rating Low → High
-            </SelectItem>
-            <SelectItem value="cen-lvl-desc" style={{ color: GOLD }}>
-              Cen LVL High → Low
-            </SelectItem>
-            <SelectItem value="cen-lvl-asc" style={{ color: GOLD }}>
-              Cen LVL Low → High
-            </SelectItem>
-            <SelectItem value="chapter-progress" style={{ color: GOLD }}>
-              Chapter Progress
-            </SelectItem>
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              data-ocid="manga.sort.select"
+              className="h-8 text-xs"
+              style={{ ...inputStyle, height: "2rem", minWidth: "160px" }}
+            >
+              <SelectValue placeholder="Sort by…" />
+            </SelectTrigger>
+            <SelectContent style={selectContentStyle}>
+              <SelectItem value="updated-desc" style={{ color: GOLD }}>
+                Recently Updated
+              </SelectItem>
+              <SelectItem value="title-asc" style={{ color: GOLD }}>
+                Title A → Z
+              </SelectItem>
+              <SelectItem value="title-desc" style={{ color: GOLD }}>
+                Title Z → A
+              </SelectItem>
+              <SelectItem value="rating-desc" style={{ color: GOLD }}>
+                Rating High → Low
+              </SelectItem>
+              <SelectItem value="rating-asc" style={{ color: GOLD }}>
+                Rating Low → High
+              </SelectItem>
+              <SelectItem value="cen-lvl-desc" style={{ color: GOLD }}>
+                Cen LVL High → Low
+              </SelectItem>
+              <SelectItem value="cen-lvl-asc" style={{ color: GOLD }}>
+                Cen LVL Low → High
+              </SelectItem>
+              <SelectItem value="chapter-progress" style={{ color: GOLD }}>
+                Chapter Progress
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
