@@ -769,28 +769,16 @@ export function useMangaSync(): UseMangaSyncReturn {
         await actor.deleteEntry(id);
         await deleteCoverIDB(id);
         recordSync();
-      } catch (err) {
-        // If the entry doesn't exist on the backend (never synced, already deleted,
-        // or an import that never completed), treat the local delete as successful.
-        // Only restore the entry for genuine transient/network errors.
-        const errMsg = String(err).toLowerCase();
-        const notFound =
-          errMsg.includes("not found") ||
-          errMsg.includes("does not exist") ||
-          errMsg.includes("no entry");
-        if (!notFound) {
-          if (removed) {
-            const removedEntry = removed;
-            setEntries((prev) => {
-              const next = [...prev, removedEntry];
-              saveCache(next);
-              return next;
-            });
-          }
-          throw new Error("Failed to delete entry");
+      } catch {
+        if (removed) {
+          const removedEntry = removed;
+          setEntries((prev) => {
+            const next = [...prev, removedEntry];
+            saveCache(next);
+            return next;
+          });
         }
-        // Entry wasn't on backend — still clean up its cover locally
-        await deleteCoverIDB(id);
+        throw new Error("Failed to delete entry");
       }
     },
     [isOnline, recordSync],
@@ -815,33 +803,6 @@ export function useMangaSync(): UseMangaSyncReturn {
             // ignore individual failures — we want to try them all
           }
         }
-        // Lock in the empty state in cache immediately so a subsequent
-        // fetchEntries triggered by queue-flush or re-render can't restore
-        // stale data before the backend propagates the deletes.
-        saveCache([]);
-
-        // Verify the backend is actually empty; retry any stragglers that
-        // slipped through (e.g. entries added by a still-running import loop
-        // or IC propagation delays).
-        try {
-          const remaining = await actor.getEntries();
-          for (const entry of remaining) {
-            try {
-              await actor.deleteEntry(entry.id);
-            } catch {
-              // ignore
-            }
-          }
-          // Final authoritative empty state
-          setEntries([]);
-          saveCache([]);
-        } catch {
-          // Backend unreachable — local state is already cleared, good enough
-        }
-      } else {
-        // Offline path — still lock in empty cache so on reconnect the
-        // queue-flush fetch won't resurrect entries from a stale cache.
-        saveCache([]);
       }
     },
     [isOnline],
