@@ -958,15 +958,21 @@ export default function App() {
         <section aria-label="Manga list">
           <div
             style={{
-              overflowX: "auto",
-              overflowY: "auto",
-              paddingLeft: "1rem",
-              paddingRight: "1rem",
               display: "flex",
-              justifyContent: "center",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
-            <div style={{ width: "100%", maxWidth: "1160px" }}>
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "1160px",
+                overflowX: "auto",
+                overflowY: "auto",
+                paddingLeft: "1rem",
+                paddingRight: "1rem",
+              }}
+            >
               {/* Loading skeleton */}
               {isLoading && entries.length === 0 && (
                 <div
