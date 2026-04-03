@@ -92,7 +92,8 @@ type ImportPhase =
   | "parsed"
   | "conflicts"
   | "importing"
-  | "done";
+  | "done"
+  | "cancelled";
 
 interface ParsedEntry {
   data: MangaFormData;
@@ -155,10 +156,14 @@ export function ImportModal({
     new Map(),
   );
 
+  // Cancellation flag: set to true when user cancels during import loop
+  const cancelledRef = useRef(false);
+
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   function resetState() {
+    cancelledRef.current = true; // stop any in-progress import loop
     setPhase("idle");
     setJsonFiles([]);
     setImageFiles([]);
@@ -422,6 +427,7 @@ export function ImportModal({
   }
 
   async function handleImport() {
+    cancelledRef.current = false; // reset cancellation flag for this import run
     setPhase("importing");
     setProgress(0);
 
@@ -440,6 +446,9 @@ export function ImportModal({
     let failed = 0;
 
     for (let i = 0; i < toImport.length; i++) {
+      // Check cancellation flag before each entry
+      if (cancelledRef.current) break;
+
       const entry = toImport[i];
       try {
         await onImportEntry(entry.data);
@@ -456,8 +465,11 @@ export function ImportModal({
       await new Promise((r) => setTimeout(r, 0));
     }
 
-    setImportResult({ added, overwritten, skipped: skippedCount, failed });
-    setPhase("done");
+    // Only update result if not cancelled
+    if (!cancelledRef.current) {
+      setImportResult({ added, overwritten, skipped: skippedCount, failed });
+      setPhase("done");
+    }
   }
 
   const btnBase: React.CSSProperties = {
