@@ -343,9 +343,15 @@ export function ImportModal({
                 .filter(Boolean)
             : [];
         const genresWithoutComplete = genres.filter((g) => g !== "Complete");
-        const status = genres.includes("Complete")
-          ? MangaStatus.Completed
-          : MangaStatus.Incomplete;
+        // Read status from JSON field if present; fall back to genre-based inference for legacy backups
+        const validStatuses = new Set(Object.values(MangaStatus));
+        const rawStatus = entry.status as string | undefined;
+        const status: MangaStatus =
+          rawStatus && validStatuses.has(rawStatus as MangaStatus)
+            ? (rawStatus as MangaStatus)
+            : genres.includes("Complete")
+              ? MangaStatus.Completed
+              : MangaStatus.Incomplete;
 
         // Handle image
         let coverImageUrl: string | undefined;

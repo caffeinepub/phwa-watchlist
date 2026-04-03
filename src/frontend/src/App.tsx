@@ -777,6 +777,7 @@ export default function App() {
             chaptersOwned: String(Number(entry.totalChapters ?? 0) / 10),
             chaptersRead: String(Number(entry.currentChapter) / 10),
             personalNotes: entry.notes || "",
+            status: String(entry.status),
             bookmarked: entry.isFavourite,
             imageFilename,
           },
